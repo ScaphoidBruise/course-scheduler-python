@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My plan — UTPB Scheduler{% endblock %}
+{% block header_below %}
+  <div class="page-intro">
+    <h1 class="page-title">My plan</h1>
+    <p class="lede">
+      Sections you add from the course list or from schedule helper suggestions. Stored
+      in this browser only — it does not register you for classes.
+    </p>
+  </div>
+{% endblock %}
+{% block content %}
+  <div id="planner-empty" class="planner-empty hidden">
+    <p>Your plan is empty. Go to <a href="{{ url_for('index') }}">Courses</a> and use
+      <strong>Add</strong> next to a section.</p>
+  </div>
+  <div id="planner-wrap" class="planner-wrap hidden">
+    <div class="planner-toolbar">
+      <p class="planner-total" id="planner-total" aria-live="polite"></p>
+      <button type="button" id="planner-clear" class="btn-show-all">Clear plan</button>
+    </div>
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/planner.js') }}" defer></script>
+{% endblock %}
+    <ul id="planner-list" class="planner-list" aria-label="Planned sections"></ul>
+  </div>
+{% endblock %}

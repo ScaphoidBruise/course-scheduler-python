@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}UTPB Scheduler{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-bar">
+        <a class="site-logo" href="{{ url_for('index') }}">UTPB Scheduler</a>
+        <nav class="site-nav" aria-label="Main pages">
+          <a
+            href="{{ url_for('index') }}"
+            class="nav-link{% if active_page == 'courses' %} is-active{% endif %}"
+            >Courses</a
+          >
+          <a
+            href="{{ url_for('planner') }}"
+            class="nav-link{% if active_page == 'planner' %} is-active{% endif %}"
+            >My plan <span id="nav-plan-count" class="nav-badge">0</span></a
+          >
+        </nav>
+      </div>
+      {% block header_below %}{% endblock %}
+    </header>
+
+    <main class="page-main">
+      {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
+  </body>
+</html>

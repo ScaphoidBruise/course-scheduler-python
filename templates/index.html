@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Courses — UTPB Scheduler{% endblock %}
+{% block header_below %}
+  <div class="page-intro">
+    <h1 class="page-title">Computer Science Courses</h1>
+    <p class="lede">
+      Look up COSC classes at UTPB: times, instructors, how full sections are, and
+      short descriptions. Add sections to <strong>My plan</strong> to track what you are
+      considering.
+    </p>
+  </div>
+{% endblock %}
+{% block content %}
+  <section class="assist-panel" aria-labelledby="assist-heading">
+    <h2 id="assist-heading">Schedule helper</h2>
+    <p class="assist-hint">
+      Describe what you need in plain English. The more you include, the better the
+      match.
+    </p>
+    <p class="assist-hint assist-hint-label">Include when you can:</p>
+    <ul class="assist-prompt-tips" aria-label="What to put in your message">
+      <li>Semester (for example Spring 2026)</li>
+      <li>Credits or specific courses you need</li>
+      <li>Times or days to avoid</li>
+      <li>In-person, online, or either</li>
+      <li>Course codes you care about (for example COSC 2315)</li>
+    </ul>
+    <p class="assist-hint assist-hint-foot">
+      For planning only — confirm with your advisor.
+    </p>
+    <div class="assist-row">
+      <label class="sr-only" for="assist-message">Your scheduling question</label>
+      <textarea
+        id="assist-message"
+        rows="4"
+        placeholder="Example: Spring 2026, ~12 credits, need COSC 2315. No classes after 3pm Tue/Thu. Prefer in-person."
+      ></textarea>
+      <button type="button" id="assist-submit" class="btn-primary">Ask</button>
+    </div>
+    <p id="assist-status" class="assist-status" role="status"></p>
+    <div id="assist-output" class="assist-output hidden"></div>
+  </section>
+
+  <div class="toolbar">
+    <label for="filter">Search</label>
+    <input
+      id="filter"
+      type="search"
+      placeholder="Course code or name…"
+      autocomplete="off"
+    />
+    <span id="count" class="count"></span>
+    <button type="button" id="show-all-courses" class="btn-show-all hidden">
+      Show all courses
+    </button>
+  </div>
+  <p id="course-list-note" class="course-list-note hidden" role="status"></p>
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+{% endblock %}
+  <div id="status" class="status" role="status"></div>
+  <ul id="course-list" class="course-list"></ul>
+{% endblock %}
