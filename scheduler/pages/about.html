@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About — UTPB Scheduler</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg main-nav">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link account-link" href="/account">Account</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content-area">
+        <div class="container-fluid px-4 py-3">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <h4 class="mb-3">About This Project</h4>
+
+                    <div class="card content-card mb-3">
+                        <div class="card-body">
+                            <h6>What is this?</h6>
+                            <p>UTPB Scheduler is a course scheduling tool built for students at
+                            The University of Texas Permian Basin. It lets you browse available
+                            sections, build a conflict-free weekly schedule, and explore the
+                            full course catalog.</p>
+                        </div>
+                    </div>
+
+                    <div class="card content-card mb-3">
+                        <div class="card-body">
+                            <h6>Data Sources</h6>
+                            <ul class="mb-0">
+                                <li><strong>Course catalog</strong> — scraped from the UTPB Smart Catalog API</li>
+                                <li><strong>Section schedules</strong> — scraped from the official UTPB course schedule pages (Spring, Summer, Fall 2026)</li>
+                                <li><strong>Term inference</strong> — derived from UTPB Falcon Maps degree-plan PDFs</li>
+                                <li><strong>Session dates</strong> — scraped from the UTPB academic calendar</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="card content-card mb-3">
+                        <div class="card-body">
+                            <h6>How It Works</h6>
+                            <p>The data pipeline runs four Python scrapers that populate a single
+                            SQLite database. The web app reads from this database to display
+                            sections, detect time conflicts, and render the weekly calendar grid.</p>
+                            <ol class="mb-0">
+                                <li><code>scraper.py</code> — fetches all courses from the UTPB catalog</li>
+                                <li><code>infer_term_from_degree_maps.py</code> — infers typical term offerings from degree-plan PDFs</li>
+                                <li><code>scrape_sections.py</code> — scrapes current semester section schedules</li>
+                                <li><code>scrape_session_dates.py</code> — links session codes to calendar start/end dates</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="card content-card">
+                        <div class="card-body">
+                            <h6>Built With</h6>
+                            <p class="mb-0">Python, Flask, SQLite, Bootstrap 5, vanilla JavaScript</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

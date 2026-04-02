@@ -1,142 +1,65 @@
-# UTPB Course Scraper 
+# UTPB Course Scraper & Scheduler
 
-This project scrapes UTPB course data and stores it in SQLite.
+A tool that scrapes course data from the UTPB website and lets you build
+a weekly class schedule in the browser. Built for COSC 3320.
 
-It supports:
-- one subject (`--subject COSC`),
-- all subjects (`--all-subjects`),
-- or interactive selection (no flags).
-
-## Run
-
-From this project folder:
+## Getting started
 
 ```bash
-python scraper.py
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Or:
+## Populating the database
+
+Run the scrapers in order. Each one builds on the last.
 
 ```bash
-python scraper.py --subject COSC
-python scraper.py --all-subjects
+python scraper.py                        # grab all courses (or use --subject COSC)
+python infer_term_from_degree_maps.py --db data/courses.db   # guess typical terms from degree maps
+python scrape_sections.py --db data/courses.db               # pull Spring/Summer/Fall 2026 sections
+python scrape_session_dates.py --db data/courses.db          # link session start/end dates from the calendar
 ```
 
-Note:
-- `--all-subjects` skips per-course detail-page fetches for speed/stability, so `prerequisites` may be empty in that mode.
+All four write to `data/courses.db`. Add `--quiet` to any of them to cut down on log output.
 
-## Degree map term inference
+If the database already exists when you run `scraper.py`, the old one gets moved to `data/archive/`.
 
-To infer a fallback term label from UTPB degree-map PDFs:
+## Running the scheduler
 
 ```bash
-python infer_term_from_degree_maps.py --db data/courses.db
+cd scheduler
+python app.py
 ```
 
-This script writes to `courses.term_infered` only.
-It requires `courses` table to already exist (run `scraper.py` first).
-By default it prints progress for each PDF. Use `--quiet` to suppress per-PDF logs.
+Then go to http://127.0.0.1:5000.
 
-## Schedule sections scraper
+You can pick a term, search/filter sections, and add them to a weekly grid.
+It'll warn you if two classes conflict. Half-semester sessions (8W1, 8W2, etc.)
+are handled separately so they won't false-flag each other.
 
-To scrape sections from the three current/upcoming schedule links (Spring/Summer/Fall cards):
+There's also a catalog page to browse all courses, plus about/help pages.
 
-```bash
-python scrape_sections.py --db data/courses.db
+## How it's built
+
+Flask serves the HTML pages and a JSON API. The frontend is plain HTML, CSS,
+and vanilla JS — no frameworks or templating. Your schedule is saved per-term
+in localStorage so it sticks between page reloads.
+
+```
+scheduler/
+├── app.py            API endpoints and page routes
+├── db.py             SQLite queries
+├── conflict.py       Conflict detection logic
+├── pages/            HTML files
+└── static/           CSS and JS
 ```
 
-Use `--quiet` to reduce logs:
+## Database tables
 
-```bash
-python scrape_sections.py --db data/courses.db --quiet
-```
+Everything lives in `data/courses.db`:
 
-This script writes to `sections` and keeps the following fields for each section:
-- `subject_code`
-- `course_number`
-- `course_code`
-- `credits` (`Hrs`)
-- `days`
-- `session` (including values like `8W1` and `8W2`)
-- `start_time`
-- `end_time`
-- `location`
-- `mode`
-
-## Session-date linker
-
-To map calendar start/end dates to each section session (`1`, `8W1`/`7W1`, `8W2`/`7W2`):
-
-```bash
-python scrape_session_dates.py --db data/courses.db
-```
-
-Use `--quiet` for less logging:
-
-```bash
-python scrape_session_dates.py --db data/courses.db --quiet
-```
-
-This reads `Classes Begin` and `Semester Ends` from the UTPB academic calendar and writes:
-- `session_calendar.term_label`
-- `session_calendar.session`
-- `session_calendar.session_start_date`
-- `session_calendar.session_end_date`
-
-Use joins when you need section dates:
-
-```sql
-SELECT s.course_code, s.term_label, s.session, c.session_start_date, c.session_end_date
-FROM sections s
-LEFT JOIN session_calendar c
-  ON c.term_label = s.term_label
- AND c.session = s.session;
-```
-
-## What gets saved
-
-Database file:
-- `data/courses.db`
-
-Table:
-- `courses`
-  - `id`
-  - `subject_code`
-  - `course_number`
-  - `course_code`
-  - `course_name`
-  - `course_url` (full URL to the catalog course page)
-  - `prerequisites`
-  - `term_infered`
-- `sections`
-  - `id`
-  - `term_label`
-  - `schedule_url`
-  - `class_nbr`
-  - `subject_code`
-  - `course_number`
-  - `course_code`
-  - `section_code`
-  - `credits`
-  - `days`
-  - `session`
-  - `start_time`
-  - `end_time`
-  - `location`
-  - `mode`
-- `session_calendar`
-  - `id`
-  - `term_label`
-  - `session`
-  - `session_start_date`
-  - `session_end_date`
-  - `source_url`
-
-## Archive behavior
-
-Before each run:
-- if `data/courses.db` already exists, it is moved to `data/archive/`
-- archive name format: `courses_YYYYMMDD_HHMMSS.db`
-- if that name already exists, `_1`, `_2`, etc. is appended
-
-Then a fresh `data/courses.db` is created and loaded.
+- **courses** — code, name, URL, prerequisites, inferred term
+- **sections** — term, section code, days, times, location, mode, session
+- **session_calendar** — start/end dates per session per term

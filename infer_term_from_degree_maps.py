@@ -1,5 +1,3 @@
-"""Infer term_infered from UTPB degree map PDFs."""
-
 import argparse
 import io
 import re

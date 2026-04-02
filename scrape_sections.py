@@ -1,5 +1,3 @@
-"""Scrape UTPB current schedule sections into SQLite."""
-
 import argparse
 import re
 import sqlite3

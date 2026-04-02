@@ -1,5 +1,3 @@
-"""Single-file UTPB course scraper CLI."""
-
 import argparse
 from datetime import datetime
 from html import unescape
@@ -16,7 +14,6 @@ SUBJECTS_URL = "https://utpb.smartcatalogiq.com/Institutions/The-University-of-T
 COURSES_URL = "https://utpb.smartcatalogiq.com/Institutions/The-University-of-Texas-Permian-Basin/json/2025-2026/courses-56458BC7-2887-4C10-9CD8-09BB773BE97A.json"
 DB_PATH = Path("data/courses.db")
 ARCHIVE_DIR = Path("data/archive")
-# Max seconds to wait for HTTP responses
 REQUEST_TIMEOUT_SECONDS = 10
 
 
