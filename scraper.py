@@ -16,6 +16,8 @@ SUBJECTS_URL = "https://utpb.smartcatalogiq.com/Institutions/The-University-of-T
 COURSES_URL = "https://utpb.smartcatalogiq.com/Institutions/The-University-of-Texas-Permian-Basin/json/2025-2026/courses-56458BC7-2887-4C10-9CD8-09BB773BE97A.json"
 DB_PATH = Path("data/courses.db")
 ARCHIVE_DIR = Path("data/archive")
+# Max seconds to wait for HTTP responses
+REQUEST_TIMEOUT_SECONDS = 10
 
 
 # just for the CLI arguments, we can just call without argument as well
@@ -28,7 +30,7 @@ def parse_args():
 
 
 def get_json(url):
-    with urlopen(url) as response:
+    with urlopen(url, timeout=REQUEST_TIMEOUT_SECONDS) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -91,9 +93,12 @@ def main():
             print(f"Please choose a number between 1 and {exit_option}.")
 
     label = "ALL" if args.all_subjects else ", ".join(sorted(selected_codes))
+    fetch_details = not args.all_subjects
 
     print(f"Selected subject scope: {label}")
     print("Loading course data...")
+    if not fetch_details:
+        print("All-subject mode: skipping slow detail-page fetch for prerequisites.")
     courses_data = get_json(COURSES_URL)
     rows = []
     seen = set()
@@ -115,29 +120,17 @@ def main():
         relative_or_full_url = re.sub(r"\s+", " ", str(item.get("url", ""))).strip()
         course_url = urljoin(BASE_URL, relative_or_full_url) if relative_or_full_url else ""
         prerequisites = ""
-        term_offered = ""
-        if course_url:
+        if course_url and fetch_details:
             try:
-                page_html = urlopen(course_url.lower()).read().decode("utf-8", "ignore")
+                page_html = urlopen(course_url.lower(), timeout=REQUEST_TIMEOUT_SECONDS).read().decode("utf-8", "ignore")
                 prereq_match = re.search(r"<div class=\"sc_prereqs\">(.*?)</div>\s*<div class=\"sc_coreqs\">", page_html, re.IGNORECASE | re.DOTALL)
                 if prereq_match:
                     prereq_block = prereq_match.group(1)
                     prereq_text = re.sub(r"<[^>]+>", " ", prereq_block)
                     prereq_text = unescape(re.sub(r"\s+", " ", prereq_text)).strip()
                     prerequisites = re.sub(r"^Prerequisites?\s*[:\-]?\s*", "", prereq_text, flags=re.IGNORECASE).strip()
-
-                term_match = re.search(r"<h[23]>\s*Terms?\s+Offered\s*</h[23]>\s*(.*?)</div>", page_html, re.IGNORECASE | re.DOTALL)
-                if term_match:
-                    term_block = term_match.group(1)
-                    term_text = re.sub(r"<[^>]+>", " ", term_block)
-                    term_offered = unescape(re.sub(r"\s+", " ", term_text)).strip()
-                else:
-                    sentence_match = re.search(r"(traditionally offered[^<\.]*\.?)", page_html, re.IGNORECASE)
-                    if sentence_match:
-                        term_offered = unescape(re.sub(r"\s+", " ", sentence_match.group(1))).strip()
             except Exception:
                 prerequisites = ""
-                term_offered = ""
         key = (course_code, course_name, course_url)
         if key in seen:
             continue
@@ -151,7 +144,6 @@ def main():
                 "course_name": course_name,
                 "course_url": course_url,
                 "prerequisites": prerequisites,
-                "term_offered": term_offered,
             }
         )
 
@@ -182,10 +174,10 @@ def main():
 
     inserted = 0
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY AUTOINCREMENT, subject_code TEXT NOT NULL, course_number TEXT NOT NULL, course_code TEXT NOT NULL, course_name TEXT NOT NULL, course_url TEXT NOT NULL, prerequisites TEXT, term_offered TEXT, UNIQUE(course_code, course_name, course_url))")
+        conn.execute("CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY AUTOINCREMENT, subject_code TEXT NOT NULL, course_number TEXT NOT NULL, course_code TEXT NOT NULL, course_name TEXT NOT NULL, course_url TEXT NOT NULL, prerequisites TEXT, UNIQUE(course_code, course_name, course_url))")
         # this should santinze the input even if we don't need to for scrapping 
         for row in rows:
-            cursor = conn.execute("INSERT OR IGNORE INTO courses (subject_code, course_number, course_code, course_name, course_url, prerequisites, term_offered) VALUES (?, ?, ?, ?, ?, ?, ?)", (row["subject_code"], row["course_number"], row["course_code"], row["course_name"], row["course_url"], row["prerequisites"], row["term_offered"]))
+            cursor = conn.execute("INSERT OR IGNORE INTO courses (subject_code, course_number, course_code, course_name, course_url, prerequisites) VALUES (?, ?, ?, ?, ?, ?)", (row["subject_code"], row["course_number"], row["course_code"], row["course_name"], row["course_url"], row["prerequisites"]))
             inserted += cursor.rowcount
         conn.commit()
 
