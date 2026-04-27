@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Catalog — UTPB Scheduler</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg main-nav">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/catalog">Catalog</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/profile">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link account-link" href="/account">Account</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content-area">
+        <div class="container-fluid px-4 py-3">
+            <h4 class="mb-3">Course Catalog</h4>
+
+            <div class="row g-2 mb-3 align-items-end">
+                <div class="col-auto">
+                    <label class="filter-label">Subject</label>
+                    <select id="subjectSelect" class="form-select form-select-sm">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="filter-label">Search</label>
+                    <input type="text" id="searchInput" class="form-control form-control-sm"
+                           placeholder="Code or name...">
+                </div>
+                <div class="col-auto">
+                    <button id="filterBtn" class="btn btn-accent btn-sm">Filter</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-hover section-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Course Name</th>
+                            <th>Prerequisites</th>
+                            <th>Term (inferred)</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="courseBody"></tbody>
+                </table>
+            </div>
+            <p class="text-muted small" id="courseCount"></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        var subjectSelect = document.getElementById("subjectSelect");
+        var searchInput = document.getElementById("searchInput");
+        var filterBtn = document.getElementById("filterBtn");
+        var courseBody = document.getElementById("courseBody");
+        var courseCount = document.getElementById("courseCount");
+
+        fetch("/api/course-subjects")
+            .then(function (r) { return r.json(); })
+            .then(function (subjects) {
+                for (var i = 0; i < subjects.length; i++) {
+                    var opt = document.createElement("option");
+                    opt.value = subjects[i];
+                    opt.textContent = subjects[i];
+                    subjectSelect.appendChild(opt);
+                }
+                loadCourses();
+            });
+
+        filterBtn.addEventListener("click", loadCourses);
+        searchInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") loadCourses();
+        });
+
+        function loadCourses() {
+            var params = "";
+            if (subjectSelect.value) params += "subject=" + encodeURIComponent(subjectSelect.value);
+            if (searchInput.value.trim()) {
+                if (params) params += "&";
+                params += "search=" + encodeURIComponent(searchInput.value.trim());
+            }
+
+            fetch("/api/courses?" + params)
+                .then(function (r) { return r.json(); })
+                .then(function (courses) {
+                    var html = "";
+                    for (var i = 0; i < courses.length; i++) {
+                        var c = courses[i];
+                        html += "<tr>";
+                        html += '<td class="fw-semibold text-nowrap">' + c.course_code + "</td>";
+                        html += "<td>" + (c.course_name || "") + "</td>";
+                        html += '<td class="small">' + (c.prerequisites || "—") + "</td>";
+                        html += "<td>" + (c.term_infered || "—") + "</td>";
+                        html += "<td>";
+                        if (c.course_url) {
+                            html += '<a href="' + c.course_url + '" target="_blank" class="btn btn-outline-accent btn-xs">View</a>';
+                        } else {
+                            html += "—";
+                        }
+                        html += "</td></tr>";
+                    }
+                    courseBody.innerHTML = html;
+                    courseCount.textContent = courses.length + " course" + (courses.length !== 1 ? "s" : "") + ".";
+                });
+        }
+    </script>
+</body>
+</html>
