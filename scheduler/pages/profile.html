@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile — UTPB Scheduler</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg main-nav">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/profile">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link account-link" href="/account">Account</a></li>
+                    <li class="nav-item"><button id="logoutBtn" class="btn btn-sm btn-outline-danger ms-lg-2 mt-2 mt-lg-0" type="button">Logout</button></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content-area">
+        <div class="container-fluid px-4 py-3">
+            <div id="alertBox"></div>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                <div>
+                    <h4 class="mb-0">Academic profile</h4>
+                    <p class="text-muted small mb-0">Upload your unofficial transcript (PDF) to track progress.</p>
+                </div>
+                <a href="/" class="btn btn-accent btn-sm">Back to schedule</a>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-lg">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-muted small text-uppercase">Major</div>
+                                <button id="editProgramBtn" class="btn btn-outline-accent btn-xs" type="button" title="Edit major/minor" aria-label="Edit major/minor">&#9998;</button>
+                            </div>
+                            <div class="fs-5 fw-semibold" id="statMajor">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Minor</div>
+                            <div class="fs-5 fw-semibold" id="statMinor">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Cumulative GPA</div>
+                            <div class="fs-5 fw-semibold" id="statCumGpa">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Previous term GPA</div>
+                            <div class="text-muted small lh-sm">Most recent graded term on the transcript</div>
+                            <div class="fs-5 fw-semibold" id="statTermGpa">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Credit hrs (earned / attempted)</div>
+                            <div class="fs-5 fw-semibold" id="statCredits">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-lg-3">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Transfer credits</div>
+                            <div class="fs-5 fw-semibold" id="statTransferCredits">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">UTPB credits</div>
+                            <div class="fs-5 fw-semibold" id="statUtpbCredits">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Total credit hours</div>
+                            <div class="fs-5 fw-semibold" id="statTotalCredits">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
+                        <div class="card-body py-3">
+                            <div class="text-muted small text-uppercase">Lower / Upper level hrs</div>
+                            <div class="fs-5 fw-semibold" id="statLevelSplit">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-lg-8">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white fw-semibold">Current enrollment</div>
+                        <div class="card-body small">
+                            <p class="text-muted mb-2" id="enrollmentMeta">
+                                Parsed from your latest term on the uploaded transcript (in-progress or ungraded lines).
+                            </p>
+                            <div id="enrollmentContent">
+                                <p class="text-muted mb-0">Upload a transcript to detect courses.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-10 col-lg-8">
+                    <div id="programEditorCard" class="card shadow-sm d-none">
+                        <div class="card-body">
+                            <form id="profileInfoForm" class="row g-2 align-items-end">
+                                <div class="col-sm-5">
+                                    <label class="form-label small mb-1">Major</label>
+                                    <input id="majorInput" type="text" class="form-control form-control-sm" placeholder="e.g. Computer Science">
+                                </div>
+                                <div class="col-sm-5">
+                                    <label class="form-label small mb-1">Minor</label>
+                                    <input id="minorInput" type="text" class="form-control form-control-sm" placeholder="e.g. Math">
+                                </div>
+                                <div class="col-sm-2 d-flex gap-2">
+                                    <button type="submit" class="btn btn-outline-accent btn-sm">Save</button>
+                                    <button id="cancelProgramEditBtn" type="button" class="btn btn-outline-secondary btn-sm">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-8 col-lg-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">Unofficial transcript</h6>
+                            <p class="text-muted small">PDF from your student portal (Banner-style layout).</p>
+                            <p class="small mb-2" id="transcriptFileMeta">No file uploaded yet.</p>
+                            <form id="transcriptForm" class="d-flex flex-wrap align-items-center gap-2">
+                                <input type="file" name="file" id="transcriptFile" class="form-control form-control-sm" accept=".pdf,application/pdf">
+                                <button type="submit" class="btn btn-accent btn-sm">Upload &amp; parse</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="warningsPanel" class="alert alert-warning d-none small"></div>
+
+            <div class="row g-3">
+                <div class="col-lg-8">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white fw-semibold">Transcript summary</div>
+                        <div class="card-body small" id="transcriptDetail">
+                            <p class="text-muted mb-0">Upload a transcript to see detected majors, terms, and transfer notes.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/profile.js"></script>
+</body>
+</html>

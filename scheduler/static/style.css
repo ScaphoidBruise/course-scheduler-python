@@ -1,0 +1,388 @@
+/* === Color Palette === */
+:root {
+    --navy-deep: #0A1628;
+    --navy-mid: #1B2A4A;
+    --accent: #E8562A;
+    --accent-hover: #CF4520;
+    --text-light: #E2E8F0;
+    --text-muted: #8899AA;
+    --surface: #F0F2F5;
+    --card-bg: #FFFFFF;
+    --conflict-red: #E53E3E;
+    --success-green: #38A169;
+    --grid-line: #E2E8F0;
+    --grid-line-faint: #F0F0F0;
+}
+
+/* === Global === */
+body {
+    background: var(--surface);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+}
+
+/* === Navbar === */
+.main-nav {
+    background: var(--navy-deep);
+    padding: 0.4rem 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.main-nav .navbar-brand {
+    color: var(--text-light);
+    font-weight: 700;
+    font-size: 1.15rem;
+}
+
+.brand-accent {
+    color: var(--accent);
+}
+
+.main-nav .nav-link {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.main-nav .nav-link:hover {
+    color: var(--text-light);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.main-nav .nav-link.active {
+    color: var(--accent);
+    background: rgba(232, 86, 42, 0.1);
+}
+
+.account-link {
+    border: 1px solid var(--text-muted);
+    border-radius: 6px !important;
+    padding: 0.35rem 0.8rem !important;
+    font-size: 0.82rem !important;
+}
+
+.account-link:hover {
+    border-color: var(--accent);
+    color: var(--accent) !important;
+}
+
+.navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* === Content Area === */
+.content-area {
+    min-height: calc(100vh - 52px);
+}
+
+.profile-stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--grid-line) !important;
+}
+
+/* === Accent Buttons === */
+.btn-accent {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 0.82rem;
+}
+
+.btn-accent:hover {
+    background: var(--accent-hover);
+    color: #fff;
+}
+
+.btn-outline-accent {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    background: transparent;
+    font-size: 0.78rem;
+}
+
+.btn-outline-accent:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.btn-xs {
+    padding: 0.1rem 0.45rem;
+    font-size: 0.72rem;
+}
+
+/* === Filter Panel (left side) === */
+.picker-panel {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 0.8rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+
+.filter-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.15rem;
+    display: block;
+}
+
+/* === Section Cards (in picker) === */
+.section-results {
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.section-card {
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 0.5rem 0.6rem;
+    margin-bottom: 0.35rem;
+    border-left: 3px solid transparent;
+    transition: border-color 0.15s;
+}
+
+.section-card:hover {
+    border-left-color: var(--accent);
+}
+
+.section-card-added {
+    border-left-color: var(--success-green);
+    opacity: 0.7;
+}
+
+.badge-added {
+    background: var(--success-green);
+    color: #fff;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+}
+
+/* === Session Badge === */
+.session-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+}
+
+.session-badge-full {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3B82F6;
+}
+
+.session-badge-half {
+    background: rgba(245, 158, 11, 0.15);
+    color: #D97706;
+}
+
+/* === Weekly Grid === */
+.grid-wrapper {
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    overflow-x: auto;
+}
+
+.weekly-grid {
+    display: flex;
+}
+
+.grid-time-col {
+    width: 64px;
+    min-width: 64px;
+    border-right: 1px solid var(--grid-line);
+}
+
+.time-header {
+    height: 32px;
+}
+
+.time-body {
+    position: relative;
+}
+
+.grid-day-col {
+    flex: 1;
+    min-width: 0;
+    border-right: 1px solid var(--grid-line-faint);
+}
+
+.grid-day-col:last-child {
+    border-right: none;
+}
+
+.day-header {
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 6px 0;
+    background: var(--navy-deep);
+    color: var(--text-light);
+    border-bottom: 1px solid var(--grid-line);
+    height: 32px;
+    line-height: 20px;
+}
+
+.day-body {
+    position: relative;
+}
+
+.hour-label {
+    position: absolute;
+    right: 6px;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    transform: translateY(-50%);
+    white-space: nowrap;
+}
+
+.hour-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--grid-line-faint);
+}
+
+/* === Schedule Blocks (outlined style) === */
+.schedule-block {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    border-radius: 4px;
+    padding: 3px 5px;
+    background: var(--card-bg);
+    border: 1px solid var(--grid-line);
+    border-left: 4px solid #888;
+    overflow: hidden;
+    cursor: default;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.15s;
+    z-index: 1;
+}
+
+.schedule-block:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    z-index: 2;
+}
+
+.conflict-block {
+    border-left-color: var(--conflict-red) !important;
+    background: #FFF5F5;
+}
+
+.half-sem-block {
+    border-style: dashed;
+    border-left-style: solid;
+}
+
+.block-code {
+    font-weight: 700;
+    font-size: 0.72rem;
+    color: var(--navy-deep);
+    line-height: 1.2;
+}
+
+.block-detail {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+
+.block-session {
+    font-size: 0.55rem;
+    font-weight: 600;
+    color: #D97706;
+    line-height: 1.2;
+}
+
+/* === Term Date Banner === */
+.term-date-banner {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding: 0.3rem 0;
+}
+
+.term-date-banner strong {
+    color: var(--navy-deep);
+}
+
+/* === Color Dot (sidebar) === */
+.color-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+/* === Section Table (below grid) === */
+.section-table {
+    font-size: 0.82rem;
+    background: var(--card-bg);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.section-table thead th {
+    background: var(--navy-mid);
+    color: var(--text-light);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border: none;
+}
+
+.table-danger-subtle {
+    background: #FFF5F5 !important;
+}
+
+/* === Content Cards (about, help) === */
+.content-card {
+    background: var(--card-bg);
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.content-card h6 {
+    color: var(--navy-deep);
+    font-weight: 700;
+}
+
+.content-card code {
+    color: var(--accent);
+    background: rgba(232, 86, 42, 0.08);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
+}
+
+/* === Alerts === */
+.alert {
+    font-size: 0.82rem;
+    border-radius: 6px;
+}
+
+/* === Scrollbar (for picker) === */
+.section-results::-webkit-scrollbar,
+.picker-panel::-webkit-scrollbar {
+    width: 5px;
+}
+
+.section-results::-webkit-scrollbar-thumb,
+.picker-panel::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
