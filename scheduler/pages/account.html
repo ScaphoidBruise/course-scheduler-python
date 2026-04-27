@@ -31,62 +31,75 @@
 
     <div class="content-area">
         <div class="container-fluid px-4 py-3">
-            <div class="row justify-content-center g-3">
-                <div class="col-lg-6">
-                    <div class="card p-3 shadow-sm">
-                        <h5 id="authTitle" class="mb-2">Login</h5>
-                        <p id="authSubtitle" class="text-muted small">Sign in to access your personal schedule profile.</p>
+            <div class="row justify-content-center">
+                <div class="col-12 col-md-10 col-lg-7 col-xl-6">
+                    <div class="card p-4 shadow-sm content-card border-0">
+                        <div id="accountStatus" class="alert d-none mb-3" role="alert"></div>
 
-                        <form id="loginForm">
-                            <div class="mb-2">
-                                <label class="form-label mb-1">Username</label>
-                                <input id="loginUsername" class="form-control" required minlength="3">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label mb-1">Password</label>
-                                <div class="input-group">
-                                    <input id="loginPassword" type="password" class="form-control" required minlength="8">
-                                    <button class="btn btn-outline-secondary" type="button" id="toggleLoginPassword" aria-label="Toggle password visibility">&#128065;</button>
-                                </div>
-                            </div>
-                            <button class="btn btn-accent w-100" type="submit">Login</button>
-                            <p class="small text-muted mt-2 mb-0 text-center">
-                                New user?
-                                <a href="#" id="showRegisterLink">Register here</a>
-                            </p>
-                        </form>
+                        <!-- Shown when not authenticated: login / register -->
+                        <div id="guestPanel">
+                            <h5 id="authTitle" class="mb-2">Login</h5>
+                            <p id="authSubtitle" class="text-muted small">Sign in to access your personal schedule and profile.</p>
 
-                        <form id="registerForm" class="d-none">
-                            <div class="mb-2">
-                                <label class="form-label mb-1">Username</label>
-                                <input id="registerUsername" class="form-control" required minlength="3">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label mb-1">Password</label>
-                                <div class="input-group">
-                                    <input id="registerPassword" type="password" class="form-control" required minlength="8">
-                                    <button class="btn btn-outline-secondary" type="button" id="toggleRegisterPassword" aria-label="Toggle password visibility">&#128065;</button>
+                            <form id="loginForm">
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Username</label>
+                                    <input id="loginUsername" class="form-control" required minlength="3" autocomplete="username">
                                 </div>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label mb-1">Confirm Password</label>
-                                <div class="input-group">
-                                    <input id="registerPasswordConfirm" type="password" class="form-control" required minlength="8">
-                                    <button class="btn btn-outline-secondary" type="button" id="toggleRegisterPasswordConfirm" aria-label="Toggle password visibility">&#128065;</button>
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Password</label>
+                                    <div class="input-group">
+                                        <input id="loginPassword" type="password" class="form-control" required minlength="8" autocomplete="current-password">
+                                        <button class="btn btn-outline-secondary" type="button" id="toggleLoginPassword" aria-label="Toggle password visibility">&#128065;</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <button class="btn btn-outline-accent w-100" type="submit">Register</button>
-                            <p class="small text-muted mt-2 mb-0 text-center">
-                                Already have an account?
-                                <a href="#" id="showLoginLink">Login here</a>
+                                <button class="btn btn-accent w-100" type="submit">Login</button>
+                                <p class="small text-muted mt-2 mb-0 text-center">
+                                    New user?
+                                    <a href="#" id="showRegisterLink">Register here</a>
+                                </p>
+                            </form>
+
+                            <form id="registerForm" class="d-none">
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Username</label>
+                                    <input id="registerUsername" class="form-control" required minlength="3" autocomplete="username">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Password</label>
+                                    <div class="input-group">
+                                        <input id="registerPassword" type="password" class="form-control" required minlength="8" autocomplete="new-password">
+                                        <button class="btn btn-outline-secondary" type="button" id="toggleRegisterPassword" aria-label="Toggle password visibility">&#128065;</button>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Confirm Password</label>
+                                    <div class="input-group">
+                                        <input id="registerPasswordConfirm" type="password" class="form-control" required minlength="8" autocomplete="new-password">
+                                        <button class="btn btn-outline-secondary" type="button" id="toggleRegisterPasswordConfirm" aria-label="Toggle password visibility">&#128065;</button>
+                                    </div>
+                                </div>
+                                <button class="btn btn-outline-accent w-100" type="submit">Register</button>
+                                <p class="small text-muted mt-2 mb-0 text-center">
+                                    Already have an account?
+                                    <a href="#" id="showLoginLink">Login here</a>
+                                </p>
+                            </form>
+                        </div>
+
+                        <!-- Shown when authenticated: no duplicate login UI -->
+                        <div id="signedInPanel" class="d-none">
+                            <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">Account</p>
+                            <h5 class="mb-2 text-navy-deep">You're signed in</h5>
+                            <p class="text-muted small mb-4">
+                                Signed in as <strong id="signedInUsername"></strong>. Your schedule and academic profile are saved to this account.
                             </p>
-                        </form>
-                    </div>
-                </div>
-                <div class="col-lg-10">
-                    <div class="d-flex justify-content-between align-items-center gap-2">
-                        <div id="accountStatus" class="alert alert-secondary d-none mb-0 flex-grow-1"></div>
-                        <button id="logoutBtn" class="btn btn-outline-danger d-none" type="button">Logout</button>
+                            <div class="d-grid gap-2">
+                                <a href="/" class="btn btn-accent">Open schedule</a>
+                                <a href="/profile" class="btn btn-outline-secondary">Academic profile</a>
+                                <button id="logoutBtn" class="btn btn-outline-danger" type="button">Logout</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

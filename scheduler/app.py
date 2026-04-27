@@ -1,6 +1,4 @@
-import json
 import os
-from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -20,16 +18,8 @@ app = Flask(__name__, static_folder="static")
 app.config["SECRET_KEY"] = os.environ.get("SCHEDULER_SECRET_KEY", "dev-change-me")
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 
-UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "data" / "uploads"
-
 init_auth_tables()
 init_profile_tables()
-
-
-def _user_upload_dir(user_id: int) -> Path:
-    path = UPLOAD_ROOT / str(user_id)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def current_user():
@@ -141,11 +131,6 @@ def api_profile():
         return auth_error
 
     prof = get_user_profile(user["id"])
-    tp = prof.get("transcript_parsed_json") or {}
-    # Parsed transcript JSON is authoritative for term GPA (avoids stale DB values).
-    last_term = prof["last_term_gpa"]
-    if isinstance(tp, dict) and prof.get("transcript_path") and "last_term_gpa" in tp:
-        last_term = tp.get("last_term_gpa")
     return jsonify(
         {
             "user": user,
@@ -153,11 +138,11 @@ def api_profile():
                 "major": prof["major"],
                 "minor": prof["minor"],
                 "cumulative_gpa": prof["cumulative_gpa"],
-                "last_term_gpa": last_term,
+                "last_term_gpa": prof["last_term_gpa"],
                 "credits_attempted": prof["credits_attempted"],
                 "credits_earned": prof["credits_earned"],
                 "transcript_original_name": prof["transcript_original_name"],
-                "has_transcript": bool(prof.get("transcript_path")),
+                "has_transcript": bool(prof.get("transcript_parsed_json")),
                 "updated_at": prof.get("updated_at"),
                 "transcript_parsed": prof.get("transcript_parsed_json"),
             },
@@ -195,19 +180,18 @@ def api_profile_transcript():
     if not upload.filename.lower().endswith(".pdf"):
         return jsonify({"error": "Please upload a PDF transcript."}), 400
 
-    dest_dir = _user_upload_dir(user["id"])
-    dest_path = dest_dir / "transcript.pdf"
-    upload.save(str(dest_path))
+    raw = upload.read()
+    if not raw:
+        return jsonify({"error": "Empty file."}), 400
 
     try:
-        parsed = parse_utpb_transcript_pdf(dest_path)
+        parsed = parse_utpb_transcript_pdf(raw)
         parsed_json = transcript_dict_to_json(parsed)
-    except (TypeError, ValueError, OSError) as exc:
+    except Exception as exc:
         return jsonify({"error": f"Could not process transcript: {exc}"}), 500
+    orig_name = secure_filename(upload.filename) or "transcript.pdf"
     updates = {
-        "transcript_path": str(dest_path),
-        "transcript_original_name": secure_filename(upload.filename)
-        or "transcript.pdf",
+        "transcript_original_name": orig_name,
         "transcript_parsed_json": parsed_json,
     }
     prof = get_user_profile(user["id"])
@@ -215,13 +199,6 @@ def api_profile_transcript():
         updates["major"] = parsed["major"]
     if parsed.get("minor") and not (prof.get("minor") or "").strip():
         updates["minor"] = parsed["minor"]
-    # Always persist last_term_gpa from this parse (including NULL) so a bogus 0
-    # from an older parser is cleared. Other fields keep prior behavior.
-    updates["last_term_gpa"] = parsed.get("last_term_gpa")
-    for fld in ("cumulative_gpa", "credits_attempted", "credits_earned"):
-        val = parsed.get(fld)
-        if val is not None:
-            updates[fld] = val
     update_user_profile(user["id"], **updates)
     return jsonify({"ok": True, "parsed": parsed})
 
@@ -309,4 +286,6 @@ def api_save_my_schedule():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    _debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    _port = int(os.environ.get("PORT", "5000"))
+    app.run(debug=_debug, port=_port)
