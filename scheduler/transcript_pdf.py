@@ -7,10 +7,12 @@ lenient. Callers should treat numeric fields as best-effort when layout shifts.
 
 from __future__ import annotations
 
+import io
 import json
 import math
 import re
 from pathlib import Path
+from typing import BinaryIO
 
 from pypdf import PdfReader
 
@@ -125,8 +127,7 @@ _INSTITUTION_START = re.compile(
 )
 
 
-def _extract_pdf_text(path: Path) -> str:
-    reader = PdfReader(str(path))
+def _extract_pdf_text_from_reader(reader: PdfReader) -> str:
     parts = []
     for page in reader.pages:
         t = ""
@@ -141,6 +142,15 @@ def _extract_pdf_text(path: Path) -> str:
                 t = ""
         parts.append(t or "")
     return "\n".join(parts)
+
+
+def _extract_pdf_text_from_stream(stream: BinaryIO) -> str:
+    return _extract_pdf_text_from_reader(PdfReader(stream))
+
+
+def _extract_pdf_text(path: Path) -> str:
+    with path.open("rb") as f:
+        return _extract_pdf_text_from_stream(f)
 
 
 def sanitize_transcript_dict_for_json(obj):
@@ -509,8 +519,8 @@ def _is_likely_enrolled(row: dict) -> bool:
     return ear <= 0
 
 
-def parse_utpb_transcript_pdf(path: Path) -> dict:
-    path = Path(path)
+def parse_utpb_transcript_pdf(source: str | Path | bytes | bytearray) -> dict:
+    """Parse a transcript from a file path or raw PDF bytes (nothing is written to disk)."""
     result = {
         "source": "transcript_pdf",
         "warnings": [],
@@ -533,10 +543,14 @@ def parse_utpb_transcript_pdf(path: Path) -> dict:
         "last_term_label": None,
         "enrolled_courses": [],
         "latest_term_courses": [],
+        "course_history": [],
     }
 
     try:
-        text = _extract_pdf_text(path)
+        if isinstance(source, (str, Path)):
+            text = _extract_pdf_text(Path(source))
+        else:
+            text = _extract_pdf_text_from_stream(io.BytesIO(bytes(source)))
     except Exception as exc:  # noqa: BLE001
         result["warnings"].append(f"Could not read PDF: {exc}")
         return result
@@ -575,6 +589,15 @@ def _parse_transcript_body(text: str, result: dict) -> None:
         result["terms"].append(f"{m.group(1)} {m.group(2).title()}")
     for m in _TERM_HEADER_SEASON_FIRST.finditer(text):
         result["terms"].append(f"{m.group(2)} {m.group(1).title()}")
+
+    if result["terms"]:
+        _seen = set()
+        _uniq: list[str] = []
+        for t in result["terms"]:
+            if t not in _seen:
+                _seen.add(t)
+                _uniq.append(t)
+        result["terms"] = _uniq
 
     # --- GPA: use last cumulative in document; last term GPA excluding transfer lines ---
     cum_matches = list(_CUM_GPA.finditer(text))
@@ -655,10 +678,41 @@ def _parse_transcript_body(text: str, result: dict) -> None:
     inst_tail = _institutional_transcript_tail(text)
 
     courses_w_terms = _extract_courses_with_terms(inst_tail)
+    inst_term_spans = _institutional_term_starts(inst_tail)
     lt_gpa = _extract_previous_term_gpa(inst_tail, courses_w_terms)
     if lt_gpa is not None:
         result["last_term_gpa"] = lt_gpa
-    inst_term_spans = _institutional_term_starts(inst_tail)
+
+    term_rank: dict[str, int] = {lbl: i for i, (_, lbl) in enumerate(inst_term_spans)}
+    if not term_rank and courses_w_terms:
+        _order: list[str] = []
+        for r in courses_w_terms:
+            t = r.get("term")
+            if t and t not in _order:
+                _order.append(t)
+        term_rank = {t: i for i, t in enumerate(_order)}
+
+    for row in courses_w_terms:
+        lbl = row.get("term")
+        result["course_history"].append(
+            {
+                "subject": row["subject"],
+                "course_number": row["course_number"],
+                "course": f"{row['subject']} {row['course_number']}",
+                "course_name": row.get("course_name") or None,
+                "attempted": row["attempted"],
+                "earned": row["earned"],
+                "grade": row.get("grade") or None,
+                "term": lbl,
+            }
+        )
+    result["course_history"].sort(
+        key=lambda e: (
+            term_rank.get(e.get("term") or "", 999),
+            e.get("subject") or "",
+            e.get("course_number") or "",
+        )
+    )
     if inst_term_spans:
         result["last_term_label"] = inst_term_spans[-1][1]
         last_lbl = result["last_term_label"]

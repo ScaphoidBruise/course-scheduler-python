@@ -34,13 +34,34 @@
         <div class="container-fluid px-4 py-3">
             <div id="alertBox"></div>
 
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-                <div>
-                    <h4 class="mb-0">Academic profile</h4>
-                    <p class="text-muted small mb-0">Upload your unofficial transcript (PDF) to track progress.</p>
+            <div class="card profile-hero border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div id="profileLoadingRow" class="d-flex align-items-center gap-3" role="status" aria-live="polite">
+                        <div class="spinner-border spinner-border-sm profile-hero-spinner" aria-hidden="true"></div>
+                        <span class="text-muted">Loading your academic profile…</span>
+                    </div>
+                    <div id="profileHeroLoaded" class="d-none">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">Academic profile</p>
+                                <h1 class="h4 mb-2 text-navy-deep" id="profileWelcome">Welcome</h1>
+                                <p class="text-muted small mb-0" id="profileBlurb">
+                                    GPA, credits, and transcript details appear below once loaded.
+                                </p>
+                            </div>
+                            <div class="d-flex flex-column align-items-stretch align-items-lg-end gap-2 flex-shrink-0">
+                                <span class="small text-muted text-lg-end" id="profileUpdatedLine"></span>
+                                <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                                    <a href="/" class="btn btn-accent btn-sm">Back to schedule</a>
+                                    <a href="/account" class="btn btn-outline-secondary btn-sm">Account settings</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <a href="/" class="btn btn-accent btn-sm">Back to schedule</a>
             </div>
+
+            <div id="profileBodyContent" class="d-none" aria-busy="true">
 
             <div class="row g-3 mb-3">
                 <div class="col-sm-6 col-lg">
@@ -48,7 +69,7 @@
                         <div class="card-body py-3">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="text-muted small text-uppercase">Major</div>
-                                <button id="editProgramBtn" class="btn btn-outline-accent btn-xs" type="button" title="Edit major/minor" aria-label="Edit major/minor">&#9998;</button>
+                                <button id="editProgramBtn" class="btn btn-outline-accent btn-xs" type="button">Edit</button>
                             </div>
                             <div class="fs-5 fw-semibold" id="statMajor">—</div>
                         </div>
@@ -141,6 +162,22 @@
             </div>
 
             <div class="row g-3 mb-3">
+                <div class="col-12 col-xl-10">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white fw-semibold">Past &amp; current credits (UTPB)</div>
+                        <div class="card-body small">
+                            <p class="text-muted mb-2" id="pastCreditsMeta">
+                                Institutional courses detected from the transcript (by term), including completed and in-progress.
+                            </p>
+                            <div id="pastCreditsContent">
+                                <p class="text-muted mb-0">Upload a transcript to list courses.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
                 <div class="col-md-10 col-lg-8">
                     <div id="programEditorCard" class="card shadow-sm d-none">
                         <div class="card-body">
@@ -169,7 +206,7 @@
                         <div class="card-body">
                             <h6 class="card-title">Unofficial transcript</h6>
                             <p class="text-muted small">PDF from your student portal (Banner-style layout).</p>
-                            <p class="small mb-2" id="transcriptFileMeta">No file uploaded yet.</p>
+                            <p class="small mb-2" id="transcriptFileMeta">No transcript on file. Upload a PDF to import.</p>
                             <form id="transcriptForm" class="d-flex flex-wrap align-items-center gap-2">
                                 <input type="file" name="file" id="transcriptFile" class="form-control form-control-sm" accept=".pdf,application/pdf">
                                 <button type="submit" class="btn btn-accent btn-sm">Upload &amp; parse</button>
@@ -191,6 +228,9 @@
                     </div>
                 </div>
             </div>
+
+            </div><!-- /#profileBodyContent -->
+
         </div>
     </div>
 

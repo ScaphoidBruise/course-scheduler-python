@@ -17,6 +17,85 @@ function fmtNum(n, digits) {
     return Number(n).toFixed(digits);
 }
 
+/** API may return transcript as object; coerce string JSON if needed. */
+function parseTranscriptObject(raw) {
+    if (!raw) return null;
+    if (typeof raw === "string") {
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+    if (typeof raw === "object") return raw;
+    return null;
+}
+
+/** Credits / hrs: show 0.0, not an em dash, when value is zero. */
+function numForDisplay(v, digits) {
+    if (v === null || v === undefined || v === "") return "—";
+    var n = Number(v);
+    if (isNaN(n)) return "—";
+    return n.toFixed(digits);
+}
+
+/** Letter grade: allow string or number from odd PDF layouts. */
+function formatGrade(c) {
+    if (!c) return "—";
+    var g = c.grade;
+    if (g === null || g === undefined) {
+        g = c.Grade;
+    }
+    if (g === null || g === undefined) return "—";
+    var s = String(g).trim();
+    if (s === "") return "—";
+    return escapeHtml(s);
+}
+
+function formatProfileTimestamp(raw) {
+    if (!raw) return "";
+    var s = String(raw).trim();
+    var norm = s.indexOf("T") === -1 ? s.replace(" ", "T") : s;
+    var d = new Date(norm);
+    if (!isNaN(d.getTime())) {
+        return d.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+        });
+    }
+    return s;
+}
+
+function revealProfileChrome(data) {
+    var u = data.user || {};
+    var welcomeEl = document.getElementById("profileWelcome");
+    var blurbEl = document.getElementById("profileBlurb");
+    var updatedLine = document.getElementById("profileUpdatedLine");
+    if (welcomeEl) {
+        welcomeEl.textContent = u.username
+            ? "Welcome back, " + u.username
+            : "Academic profile";
+    }
+    if (blurbEl) {
+        blurbEl.textContent =
+            "Upload your unofficial transcript (PDF) to import GPA and courses. You can edit major or minor anytime.";
+    }
+    var p = data.profile || {};
+    if (updatedLine) {
+        var ts = formatProfileTimestamp(p.updated_at);
+        updatedLine.textContent = ts ? "Saved data · " + ts : "";
+        updatedLine.classList.toggle("d-none", !ts);
+    }
+    document.getElementById("profileLoadingRow").classList.add("d-none");
+    document.getElementById("profileHeroLoaded").classList.remove("d-none");
+    var body = document.getElementById("profileBodyContent");
+    body.classList.remove("d-none");
+    body.setAttribute("aria-busy", "false");
+}
+
 function escapeHtml(s) {
     return String(s)
         .replace(/&/g, "&amp;")
@@ -29,10 +108,6 @@ function renderCourseList(courses) {
     var ul = '<ul class="list-group list-group-flush">';
     for (var i = 0; i < courses.length; i++) {
         var c = courses[i];
-        var g =
-            c.grade !== null && c.grade !== undefined && c.grade !== ""
-                ? c.grade
-                : "—";
         var code = c.course || (c.subject + " " + c.course_number);
         var title = c.course_name && String(c.course_name).trim();
         var left =
@@ -51,9 +126,9 @@ function renderCourseList(courses) {
             '<li class="list-group-item d-flex justify-content-between align-items-start px-0">' +
             left +
             '<span class="text-muted text-nowrap flex-shrink-0">' +
-            fmtNum(c.attempted, 1) +
+            numForDisplay(c.attempted, 1) +
             " cr · " +
-            g +
+            formatGrade(c) +
             "</span></li>";
     }
     ul += "</ul>";
@@ -68,9 +143,86 @@ function closeProgramEditor() {
     programEditorCard.classList.add("d-none");
 }
 
+function getTranscriptCourseRows(tp) {
+    if (!tp) return { rows: [], partial: false };
+    if (tp.course_history && tp.course_history.length) {
+        return { rows: tp.course_history, partial: Boolean(tp.course_history_is_partial) };
+    }
+    var lt = tp.latest_term_courses || [];
+    if (lt.length) {
+        return { rows: lt, partial: true };
+    }
+    return { rows: [], partial: false };
+}
+
+function renderPastCredits(tp) {
+    var el = document.getElementById("pastCreditsContent");
+    var meta = document.getElementById("pastCreditsMeta");
+    var pack = getTranscriptCourseRows(tp);
+    var rows = pack.rows;
+    var partial = pack.partial;
+    if (!rows.length) {
+        meta.textContent =
+            "Institutional courses (UTPB) by term from the parsed transcript. Transfer work is summarized elsewhere.";
+        el.innerHTML =
+            '<p class="text-muted mb-0">' +
+            (!tp
+                ? "No transcript data yet."
+                : "No course rows found. Re-upload your unofficial transcript; use the PDF from your student portal (Banner / unofficial transcript).") +
+            "</p>";
+        return;
+    }
+    var note = "";
+    if (partial) {
+        note =
+            '<div class="alert alert-info py-2 small mb-2" role="status">' +
+            "<strong>Partial list.</strong> This profile was saved before full course history was stored, or only the current term " +
+            "was parsed. <strong>Re-upload the same PDF</strong> (or a fresh copy) to load <strong>all terms</strong> in this table." +
+            "</div>";
+    }
+    meta.textContent =
+        rows.length +
+        " course row(s) from the institutional section (completed and in-progress).";
+    if (partial) {
+        meta.textContent += " Older terms may be missing until you re-import the transcript.";
+    }
+    var html = note;
+    html +=
+        '<div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle section-table"><thead><tr>' +
+        "<th>Term</th><th>Course</th><th>Title</th>" +
+        '<th class="text-end">Attempted</th><th class="text-end">Grade</th><th class="text-end">Earned</th>' +
+        "</tr></thead><tbody>";
+    for (var i = 0; i < rows.length; i++) {
+        var c = rows[i];
+        var code =
+            c.course ||
+            (c.subject && c.course_number ? c.subject + " " + c.course_number : "—");
+        var title =
+            c.course_name && String(c.course_name).trim()
+                ? escapeHtml(String(c.course_name).trim())
+                : "—";
+        html +=
+            '<tr><td class="text-nowrap">' +
+            escapeHtml(c.term || "—") +
+            '</td><td class="fw-semibold text-nowrap">' +
+            escapeHtml(code) +
+            '</td><td class="small">' +
+            title +
+            '</td><td class="text-end">' +
+            numForDisplay(c.attempted, 1) +
+            '</td><td class="text-end">' +
+            formatGrade(c) +
+            '</td><td class="text-end">' +
+            numForDisplay(c.earned, 1) +
+            "</td></tr>";
+    }
+    html += "</tbody></table></div>";
+    el.innerHTML = html;
+}
+
 function renderProfile(data) {
     var p = data.profile || {};
-    var tp = p.transcript_parsed || null;
+    var tp = parseTranscriptObject(p.transcript_parsed);
 
     document.getElementById("statMajor").textContent = p.major || "—";
     document.getElementById("statMinor").textContent = p.minor || "—";
@@ -144,10 +296,12 @@ function renderProfile(data) {
         }
     }
 
+    renderPastCredits(tp);
+
     document.getElementById("transcriptFileMeta").textContent =
         p.has_transcript && p.transcript_original_name
-            ? "Current file: " + p.transcript_original_name
-            : "No file uploaded yet.";
+            ? "Last import: " + p.transcript_original_name
+            : "No transcript on file. Upload a PDF to import grades and program info.";
 
     var warnEl = document.getElementById("warningsPanel");
     var warns = [];
@@ -185,6 +339,7 @@ function renderProfile(data) {
         tEl.innerHTML = html || '<p class="text-muted mb-0">Transcript parsed; no extra summary lines.</p>';
     }
 
+    revealProfileChrome(data);
 }
 
 function loadProfile() {
@@ -193,6 +348,9 @@ function loadProfile() {
             if (r.status === 401) {
                 window.location.href = "/account";
                 throw new Error("Unauthorized");
+            }
+            if (!r.ok) {
+                throw new Error("Server returned HTTP " + r.status + ".");
             }
             return r.json();
         })
@@ -228,7 +386,7 @@ document.getElementById("transcriptForm").addEventListener("submit", function (e
                 );
                 return;
             }
-            showAlert("Transcript uploaded and parsed.", "success");
+            showAlert("Transcript parsed; your profile was updated.", "success");
             inp.value = "";
             return loadProfile();
         })
@@ -280,4 +438,19 @@ logoutBtn.addEventListener("click", function () {
         });
 });
 
-loadProfile().catch(function () {});
+loadProfile().catch(function (err) {
+    if (err && err.message === "Unauthorized") return;
+    document.getElementById("profileLoadingRow").classList.add("d-none");
+    document.getElementById("profileHeroLoaded").classList.remove("d-none");
+    document.getElementById("profileWelcome").textContent = "Could not load profile";
+    document.getElementById("profileBlurb").textContent =
+        err && err.message
+            ? err.message
+            : "Something went wrong. Check your connection and refresh this page.";
+    document.getElementById("profileUpdatedLine").textContent = "";
+    document.getElementById("profileUpdatedLine").classList.add("d-none");
+    showAlert(
+        err && err.message ? escapeHtml(err.message) : "Could not load profile data.",
+        "danger"
+    );
+});

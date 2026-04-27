@@ -1,4 +1,7 @@
 var statusEl = document.getElementById("accountStatus");
+var guestPanel = document.getElementById("guestPanel");
+var signedInPanel = document.getElementById("signedInPanel");
+var signedInUsername = document.getElementById("signedInUsername");
 var loginForm = document.getElementById("loginForm");
 var registerForm = document.getElementById("registerForm");
 var logoutBtn = document.getElementById("logoutBtn");
@@ -14,8 +17,25 @@ var showRegisterLink = document.getElementById("showRegisterLink");
 var showLoginLink = document.getElementById("showLoginLink");
 
 function showStatus(message, type) {
-    statusEl.className = "alert mb-0 alert-" + type;
+    statusEl.className = "alert mb-3 alert-" + type;
     statusEl.textContent = message;
+}
+
+function hideGuestStatus() {
+    statusEl.className = "alert d-none mb-3";
+    statusEl.textContent = "";
+}
+
+function showGuestChrome() {
+    guestPanel.classList.remove("d-none");
+    signedInPanel.classList.add("d-none");
+}
+
+function showSignedInChrome(user) {
+    guestPanel.classList.add("d-none");
+    signedInPanel.classList.remove("d-none");
+    signedInUsername.textContent = user.username || "";
+    hideGuestStatus();
 }
 
 function postJson(url, payload) {
@@ -40,7 +60,7 @@ function togglePassword(inputEl) {
 
 function showLoginMode() {
     authTitle.textContent = "Login";
-    authSubtitle.textContent = "Sign in to access your personal schedule profile.";
+    authSubtitle.textContent = "Sign in to access your personal schedule and profile.";
     loginForm.classList.remove("d-none");
     registerForm.classList.add("d-none");
 }
@@ -76,21 +96,22 @@ showLoginLink.addEventListener("click", function (e) {
 
 function refreshSessionBanner() {
     fetch("/api/me")
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+            return r.json();
+        })
         .then(function (data) {
             if (data.authenticated && data.user) {
-                logoutBtn.classList.remove("d-none");
-                showStatus(
-                    "Logged in as " + data.user.username + ". You can open your scheduler now.",
-                    "success"
-                );
+                showSignedInChrome(data.user);
             } else {
-                logoutBtn.classList.add("d-none");
-                showStatus("You are not logged in.", "secondary");
+                showGuestChrome();
+                showLoginMode();
+                hideGuestStatus();
             }
         })
         .catch(function () {
-            showStatus("Could not check session status.", "danger");
+            showGuestChrome();
+            showLoginMode();
+            showStatus("Could not check session status. You can still try to sign in.", "danger");
         });
 }
 
@@ -105,7 +126,7 @@ loginForm.addEventListener("submit", function (e) {
                 showStatus(result.body.error || "Login failed.", "danger");
                 return;
             }
-            showStatus("Login successful. Redirecting to schedule...", "success");
+            showStatus("Login successful. Redirecting to schedule…", "success");
             setTimeout(function () {
                 window.location.href = "/";
             }, 600);
@@ -136,7 +157,7 @@ registerForm.addEventListener("submit", function (e) {
                 showStatus(result.body.error || "Registration failed.", "danger");
                 return;
             }
-            showStatus("Registration successful. Redirecting to schedule...", "success");
+            showStatus("Registration successful. Redirecting to schedule…", "success");
             setTimeout(function () {
                 window.location.href = "/";
             }, 600);
@@ -149,10 +170,7 @@ registerForm.addEventListener("submit", function (e) {
 logoutBtn.addEventListener("click", function () {
     postJson("/api/logout", {})
         .then(function () {
-            showStatus("You have been logged out.", "info");
-            setTimeout(function () {
-                window.location.href = "/account";
-            }, 500);
+            window.location.href = "/account";
         })
         .catch(function () {
             showStatus("Could not log out right now. Try again.", "danger");
@@ -160,4 +178,3 @@ logoutBtn.addEventListener("click", function () {
 });
 
 refreshSessionBanner();
-showLoginMode();
