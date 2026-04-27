@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "courses.db"
@@ -8,6 +9,7 @@ DB_PATH = Path(__file__).resolve().parent.parent / "data" / "courses.db"
 def get_connection():
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -39,6 +41,106 @@ def init_auth_tables():
     conn.close()
 
 
+_USER_PROFILES_SLIM_COLUMNS = (
+    "user_id",
+    "major",
+    "minor",
+    "transcript_original_name",
+    "transcript_parsed_json",
+    "updated_at",
+)
+
+
+def _user_profiles_current_columns(conn):
+    return [r[1] for r in conn.execute("PRAGMA table_info(user_profiles)").fetchall()]
+
+
+def _migrate_user_profiles_slim():
+    """
+    Rebuild user_profiles to the slim schema. GPA, credits, and full course
+    data live in transcript_parsed_json only. Legacy row columns are merged
+    into the JSON when the parser never stored them.
+    """
+    conn = get_connection()
+    try:
+        has_table = conn.execute(
+            "SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name='user_profiles'"
+        ).fetchone()[0]
+        if not has_table:
+            return
+        cols = set(_user_profiles_current_columns(conn))
+        want = set(_USER_PROFILES_SLIM_COLUMNS)
+        if cols == want:
+            return
+
+        cur = conn.execute("SELECT * FROM user_profiles")
+        col_names = [d[0] for d in cur.description]
+        old_rows = cur.fetchall()
+        conn.execute("BEGIN")
+        conn.execute(
+            """
+            CREATE TABLE user_profiles__new (
+                user_id INTEGER PRIMARY KEY,
+                major TEXT,
+                minor TEXT,
+                transcript_original_name TEXT,
+                transcript_parsed_json TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        for row in old_rows:
+            d = {col_names[i]: row[i] for i in range(len(col_names))}
+            parsed = d.get("transcript_parsed_json")
+            pdict = None
+            if isinstance(parsed, str) and parsed.strip():
+                try:
+                    pdict = json.loads(parsed)
+                except json.JSONDecodeError:
+                    pdict = {}
+            elif parsed is not None and not isinstance(parsed, str):
+                pdict = parsed
+            if pdict is None:
+                pdict = {}
+            if not isinstance(pdict, dict):
+                pdict = {}
+            legacy_keys = (
+                "cumulative_gpa",
+                "last_term_gpa",
+                "credits_attempted",
+                "credits_earned",
+            )
+            for key in legacy_keys:
+                if pdict.get(key) is None and d.get(key) is not None:
+                    pdict[key] = d[key]
+            new_json = json.dumps(pdict, allow_nan=False) if pdict else None
+            conn.execute(
+                """
+                INSERT INTO user_profiles__new (
+                    user_id, major, minor, transcript_original_name, transcript_parsed_json, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    d.get("user_id"),
+                    d.get("major"),
+                    d.get("minor"),
+                    d.get("transcript_original_name"),
+                    new_json,
+                    d.get("updated_at")
+                    or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                ),
+            )
+        conn.execute("DROP TABLE user_profiles")
+        conn.execute("ALTER TABLE user_profiles__new RENAME TO user_profiles")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def init_profile_tables():
     conn = get_connection()
     conn.execute(
@@ -47,16 +149,8 @@ def init_profile_tables():
             user_id INTEGER PRIMARY KEY,
             major TEXT,
             minor TEXT,
-            cumulative_gpa REAL,
-            last_term_gpa REAL,
-            credits_attempted REAL,
-            credits_earned REAL,
-            transcript_path TEXT,
             transcript_original_name TEXT,
-            degree_plan_path TEXT,
-            degree_plan_original_name TEXT,
             transcript_parsed_json TEXT,
-            degree_plan_parsed_json TEXT,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
@@ -64,6 +158,7 @@ def init_profile_tables():
     )
     conn.commit()
     conn.close()
+    _migrate_user_profiles_slim()
 
 
 def ensure_user_profile(user_id):
@@ -85,32 +180,61 @@ def get_user_profile(user_id):
     ).fetchone()
     conn.close()
     data = dict(row)
-    for key in ("transcript_parsed_json", "degree_plan_parsed_json"):
-        raw = data.get(key)
-        if raw:
-            try:
-                data[key] = json.loads(raw)
-            except json.JSONDecodeError:
-                data[key] = None
-        else:
-            data[key] = None
+    raw = data.get("transcript_parsed_json")
+    if raw:
+        try:
+            data["transcript_parsed_json"] = json.loads(raw)
+        except json.JSONDecodeError:
+            data["transcript_parsed_json"] = None
+    else:
+        data["transcript_parsed_json"] = None
+    _enrich_transcript_parsed(data.get("transcript_parsed_json"))
+    _augment_from_transcript_json(data)
     return data
+
+
+def _enrich_transcript_parsed(parsed):
+    """
+    Transcripts stored before 'course_history' existed only have latest_term_courses
+    and enrolled_courses. Reconstruct a best-effort course list for the UI
+    (full multi-term history still requires a fresh PDF import).
+    """
+    if not isinstance(parsed, dict):
+        return
+    ch = parsed.get("course_history")
+    if isinstance(ch, list) and len(ch) > 0:
+        return
+    latest = parsed.get("latest_term_courses") or []
+    if not isinstance(latest, list) or not latest:
+        return
+    parsed["course_history"] = [dict(r) for r in latest if isinstance(r, dict)]
+    parsed["course_history_is_partial"] = True
+
+
+def _augment_from_transcript_json(data):
+    """Populate top-level *_gpa and credits* for the API (single source: parsed JSON)."""
+    tp = data.get("transcript_parsed_json")
+    if not isinstance(tp, dict):
+        for key in (
+            "cumulative_gpa",
+            "last_term_gpa",
+            "credits_attempted",
+            "credits_earned",
+        ):
+            data[key] = None
+        return
+    data["cumulative_gpa"] = tp.get("cumulative_gpa")
+    data["last_term_gpa"] = tp.get("last_term_gpa")
+    data["credits_attempted"] = tp.get("credits_attempted")
+    data["credits_earned"] = tp.get("credits_earned")
 
 
 _PROFILE_UPDATE_FIELDS = frozenset(
     {
         "major",
         "minor",
-        "cumulative_gpa",
-        "last_term_gpa",
-        "credits_attempted",
-        "credits_earned",
-        "transcript_path",
         "transcript_original_name",
-        "degree_plan_path",
-        "degree_plan_original_name",
         "transcript_parsed_json",
-        "degree_plan_parsed_json",
     }
 )
 

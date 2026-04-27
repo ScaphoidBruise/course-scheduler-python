@@ -1,3 +1,10 @@
+def is_half_semester(session):
+    if not session or not str(session).strip():
+        return False
+    s = str(session).upper()
+    return "W1" in s or "W2" in s
+
+
 def parse_days(days_str):
     if not days_str or not days_str.strip():
         return set()
@@ -45,6 +52,17 @@ def sections_conflict(section_a, section_b):
 
     if not (days_a & days_b):
         return False
+
+    # First and second 8-week sessions do not overlap (matches schedule.js).
+    if is_half_semester(section_a.get("session")) and is_half_semester(
+        section_b.get("session")
+    ):
+        sa = str(section_a.get("session", "")).upper()
+        sb = str(section_b.get("session", "")).upper()
+        a_w1 = "W1" in sa
+        b_w1 = "W1" in sb
+        if a_w1 != b_w1:
+            return False
 
     start_a = parse_time(section_a.get("start_time", ""))
     end_a = parse_time(section_a.get("end_time", ""))

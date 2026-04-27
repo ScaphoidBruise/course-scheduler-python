@@ -82,6 +82,23 @@ body {
     border: 1px solid var(--grid-line) !important;
 }
 
+.profile-hero {
+    border-left: 4px solid var(--accent);
+    background: linear-gradient(145deg, #ffffff 0%, var(--surface) 100%);
+}
+
+.profile-hero-spinner {
+    color: var(--accent);
+}
+
+.text-navy-deep {
+    color: var(--navy-deep);
+}
+
+.letter-spacing-tight {
+    letter-spacing: 0.04em;
+}
+
 /* === Accent Buttons === */
 .btn-accent {
     background: var(--accent);
