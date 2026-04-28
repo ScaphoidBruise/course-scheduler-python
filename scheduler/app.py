@@ -22,7 +22,7 @@ from db import (
     get_academic_program_names,
     get_completed_course_codes, check_prerequisites, get_degree_progress,
     list_completed_overrides, add_completed_override, delete_completed_override,
-    calculate_gpa_whatif, normalize_course_code,
+    normalize_course_code,
     change_password, change_username, delete_user_cascade,
     account_summary, export_user_bundle,
     get_connection,
@@ -112,6 +112,134 @@ def _planner_target_for_user(user_id):
     if value <= 0:
         value = float(DEFAULT_PLANNER_TARGET)
     return value
+
+
+def _schedule_term_label(value):
+    text = " ".join(str(value or "").split())
+    season, year = _term_parts(text)
+    if season in TERM_SEASON_ORDER and year is not None:
+        return f"{season} {year}"
+    bits = text.split()
+    if len(bits) == 2 and bits[0].isdigit():
+        flipped = f"{bits[1].title()} {bits[0]}"
+        season, year = _term_parts(flipped)
+        if season in TERM_SEASON_ORDER and year is not None:
+            return f"{season} {year}"
+    return None
+
+
+def _is_current_transcript_row(row):
+    grade = str(row.get("grade") if row.get("grade") is not None else row.get("Grade") or "").strip().upper()
+    if grade in {"IP", "I"}:
+        return True
+    if grade:
+        return False
+    try:
+        attempted = float(row.get("attempted") or row.get("credits") or 0)
+        earned = float(row.get("earned") or 0)
+    except (TypeError, ValueError):
+        return True
+    return attempted > 0 and earned <= 0
+
+
+def _current_transcript_courses(parsed):
+    if not isinstance(parsed, dict):
+        return None, []
+    term = _schedule_term_label(parsed.get("last_term_label"))
+    rows = [r for r in parsed.get("enrolled_courses") or [] if isinstance(r, dict)]
+    if not rows:
+        rows = [
+            r for r in parsed.get("latest_term_courses") or []
+            if isinstance(r, dict) and _is_current_transcript_row(r)
+        ]
+    if not rows:
+        rows = [
+            r for r in parsed.get("course_history") or []
+            if isinstance(r, dict) and _is_current_transcript_row(r)
+        ]
+    if not term:
+        for row in rows:
+            term = _schedule_term_label(row.get("term"))
+            if term:
+                break
+    if term:
+        rows = [r for r in rows if not _schedule_term_label(r.get("term")) or _schedule_term_label(r.get("term")) == term]
+    return term, rows
+
+
+def _term_label_variants_for_schedule(term_label):
+    out = {term_label}
+    season, year = _term_parts(term_label)
+    if season in TERM_SEASON_ORDER and year is not None:
+        out.add(f"{year} {season}")
+    return list(out)
+
+
+def _seed_current_term_schedule_from_transcript(user_id, parsed):
+    term, rows = _current_transcript_courses(parsed)
+    if not term or not rows:
+        return {"term": term, "added_count": 0, "course_codes": []}
+
+    codes = []
+    seen = set()
+    for row in rows:
+        code = normalize_course_code(row.get("course") or f"{row.get('subject', '')} {row.get('course_number', '')}")
+        if code and code not in seen:
+            seen.add(code)
+            codes.append(code)
+    if not codes:
+        return {"term": term, "added_count": 0, "course_codes": []}
+
+    existing_ids = get_saved_schedule_ids(user_id, term)
+    existing_codes = {
+        normalize_course_code(row.get("course_code"))
+        for row in get_sections_by_ids(existing_ids, term_label=term)
+        if row.get("course_code")
+    }
+    variants = _term_label_variants_for_schedule(term)
+    term_placeholders = ",".join("?" for _ in variants)
+
+    new_ids = []
+    added_codes = []
+    conn = get_connection()
+    try:
+        for code in codes:
+            if code in existing_codes:
+                continue
+            compact = code.replace(" ", "")
+            course = conn.execute(
+                """
+                SELECT id
+                FROM courses
+                WHERE REPLACE(UPPER(course_code), ' ', '') = ?
+                ORDER BY id
+                LIMIT 1
+                """,
+                (compact,),
+            ).fetchone()
+            if not course:
+                continue
+            sections = conn.execute(
+                f"""
+                SELECT id
+                FROM sections
+                WHERE term_label IN ({term_placeholders})
+                  AND REPLACE(UPPER(course_code), ' ', '') = ?
+                ORDER BY id
+                """,
+                [*variants, compact],
+            ).fetchall()
+            if len(sections) == 1:
+                new_ids.append(int(sections[0]["id"]))
+            else:
+                new_ids.append(-int(course["id"]))
+            added_codes.append(code)
+    finally:
+        conn.close()
+
+    if new_ids:
+        save_schedule_ids(user_id, term, existing_ids + new_ids)
+    return {"term": term, "added_count": len(new_ids), "course_codes": added_codes}
 
 
 def _sections_have_conflicts(sections):
@@ -719,7 +847,8 @@ def api_profile_transcript():
     if parsed.get("minor") and not (prof.get("minor") or "").strip():
         updates["minor"] = parsed["minor"]
     update_user_profile(user["id"], **updates)
-    return jsonify({"ok": True, "parsed": parsed})
+    seeded_schedule = _seed_current_term_schedule_from_transcript(user["id"], parsed)
+    return jsonify({"ok": True, "parsed": parsed, "seeded_schedule": seeded_schedule})
 
 
 @app.route("/api/degree-progress")
@@ -846,22 +975,6 @@ def api_delete_completed_override(override_id):
     if not delete_completed_override(user["id"], override_id):
         return jsonify({"error": "Override not found"}), 404
     return jsonify({"ok": True})
-
-
-@app.route("/api/gpa-whatif")
-def api_gpa_whatif():
-    user, auth_error = require_auth()
-    if auth_error:
-        return auth_error
-    raw = request.args.get("courses") or ""
-    pairs = []
-    for item in raw.split(","):
-        item = item.strip()
-        if not item or ":" not in item:
-            continue
-        code, grade = item.rsplit(":", 1)
-        pairs.append((code.strip(), grade.strip()))
-    return jsonify(calculate_gpa_whatif(user["id"], pairs))
 
 
 @app.route("/api/register", methods=["POST"])

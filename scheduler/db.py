@@ -766,48 +766,6 @@ def _credits_for_course(user_id: int, course_code: str) -> float:
     return 3.0
 
 
-def calculate_gpa_whatif(user_id: int, hypothetical_courses: list[tuple[str, str]]) -> dict:
-    credits = 0.0
-    points = 0.0
-    source_rows = 0
-    for row in _transcript_course_history(user_id):
-        grade = _grade_from_row(row)
-        if grade not in GPA_POINTS:
-            continue
-        hrs = _row_attempted_credits(row)
-        if hrs <= 0:
-            continue
-        credits += hrs
-        points += hrs * GPA_POINTS[grade]
-        source_rows += 1
-
-    projected: list[dict] = []
-    for code_raw, grade_raw in hypothetical_courses:
-        code = normalize_course_code(code_raw)
-        grade = str(grade_raw or "").strip().upper()
-        if grade not in GPA_POINTS:
-            continue
-        hrs = _credits_for_course(user_id, code)
-        credits += hrs
-        points += hrs * GPA_POINTS[grade]
-        projected.append(
-            {
-                "course_code": code,
-                "grade": grade,
-                "credits": hrs,
-                "points": hrs * GPA_POINTS[grade],
-            }
-        )
-
-    return {
-        "projected_gpa": round(points / credits, 3) if credits > 0 else None,
-        "quality_points": round(points, 3),
-        "credits": round(credits, 3),
-        "transcript_gpa_rows": source_rows,
-        "courses": projected,
-    }
-
-
 def _enrich_transcript_parsed(parsed):
     """
     Transcripts stored before 'course_history' existed only have latest_term_courses
@@ -2127,6 +2085,24 @@ def get_sections_by_ids(section_ids, term_label: str | None = None):
             ).fetchall()
             for r in crows:
                 d = _placeholder_dict_from_course_row(r, tl)
+                if tl:
+                    variants = _term_label_variants(tl)
+                    if variants:
+                        vph = ",".join("?" for _ in variants)
+                        credit_row = conn.execute(
+                            f"""
+                            SELECT credits
+                            FROM sections
+                            WHERE term_label IN ({vph})
+                              AND REPLACE(UPPER(course_code), ' ', '') = ?
+                              AND TRIM(COALESCE(credits, '')) != ''
+                            ORDER BY id
+                            LIMIT 1
+                            """,
+                            [*variants, compact_course_code(r["course_code"])],
+                        ).fetchone()
+                        if credit_row:
+                            d["credits"] = credit_row["credits"]
                 by_sid[d["id"]] = d
 
         return [by_sid[sid] for sid in section_ids if sid in by_sid]

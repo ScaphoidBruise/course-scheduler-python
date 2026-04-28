@@ -179,6 +179,71 @@ class PlannerApiTest(unittest.TestCase):
         self.assertEqual(target.status_code, 200)
         self.assertEqual(target.get_json()["credits_target"], 132)
 
+    def test_transcript_current_courses_seed_schedule_and_planner(self):
+        register = self.client.post(
+            "/api/register",
+            json={
+                "username": "seed_user",
+                "password": "password123",
+                "confirm_password": "password123",
+            },
+        )
+        self.assertEqual(register.status_code, 201)
+        user_id = register.get_json()["user"]["id"]
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            """
+            INSERT INTO sections (
+                term_label, schedule_url, class_nbr, subject_code, course_number, course_code,
+                section_code, credits, days, session, start_time, end_time, location, mode
+            ) VALUES (
+                'Fall 2026', 'https://example.test', '1004', 'COSC', '3320', 'COSC 3320',
+                '002', '3.00', 'TR', '1', '2:00 PM', '3:15 PM', 'MESA 101', 'Face-to-Face'
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        seeded = self.app_module._seed_current_term_schedule_from_transcript(
+            user_id,
+            {
+                "last_term_label": "2026 Fall",
+                "enrolled_courses": [
+                    {
+                        "term": "2026 Fall",
+                        "subject": "COSC",
+                        "course_number": "3320",
+                        "course": "COSC 3320",
+                        "attempted": 3.0,
+                        "earned": 0.0,
+                        "grade": None,
+                    },
+                    {
+                        "term": "2026 Fall",
+                        "subject": "MATH",
+                        "course_number": "2413",
+                        "course": "MATH 2413",
+                        "attempted": 3.0,
+                        "earned": 0.0,
+                        "grade": "IP",
+                    },
+                ],
+            },
+        )
+        self.assertEqual(seeded["term"], "Fall 2026")
+        self.assertEqual(seeded["added_count"], 2)
+
+        saved = self.client.get("/api/my-schedule?term=Fall%202026")
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.get_json()["ids"], [-1, 2])
+
+        overview = self.client.get("/api/planner-overview")
+        self.assertEqual(overview.status_code, 200)
+        terms = {term["label"]: term for term in overview.get_json()["terms"]}
+        self.assertEqual(terms["Fall 2026"]["section_count"], 2)
+        self.assertEqual(terms["Fall 2026"]["credits"], 6)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
