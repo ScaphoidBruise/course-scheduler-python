@@ -2,3 +2,10 @@
 __pycache__/
 *.pyc
 data/archive/
+data/program_requirements_review.json
+.env
+.env.*
+!.env.example
+
+.coverage
+.pytest_cache/

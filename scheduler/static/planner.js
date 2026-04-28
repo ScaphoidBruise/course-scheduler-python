@@ -134,14 +134,26 @@ function renderHero(totals) {
     var completed = Number(totals.credits_completed || 0);
     var target = Number(totals.credits_target || 120);
     var percent = target > 0 ? Math.min(100, Math.round((completed / target) * 100)) : 0;
+    var isCatalogTarget = totals.credits_target_source === "scraped_program_requirements";
     document.getElementById("creditsCompleted").textContent = fmt(completed);
     document.getElementById("creditsTarget").textContent = fmt(target);
     document.getElementById("creditsPlanned").textContent = fmt(totals.credits_planned || 0);
     document.getElementById("expectedGraduation").textContent = totals.expected_graduation_label || "--";
-    document.getElementById("targetInput").value = fmt(target);
+    var targetInput = document.getElementById("targetInput");
+    var targetButton = document.querySelector("#targetForm button[type='submit']");
+    var targetStatus = document.getElementById("plannerTargetStatus");
+    if (targetInput) {
+        targetInput.value = fmt(target);
+        targetInput.disabled = isCatalogTarget;
+    }
+    if (targetButton) targetButton.disabled = isCatalogTarget;
+    if (targetStatus) {
+        targetStatus.textContent = isCatalogTarget ? "Catalog target: " + fmt(target) + " credits" : "";
+    }
     var bar = document.getElementById("graduationProgress");
     bar.style.width = percent + "%";
-    bar.textContent = percent >= 12 ? percent + "%" : "";
+    bar.textContent = "";
+    document.getElementById("graduationProgressLabel").textContent = percent + "%";
 }
 
 function renderTimeline(terms) {
@@ -262,6 +274,135 @@ function renderGpa(profile) {
     wrap.innerHTML = '<div class="text-muted small mb-1">GPA trend</div><svg class="planner-sparkline" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="GPA trend"><path class="planner-sparkline-path" d="' + path + '"></path></svg>';
 }
 
+var aiChatHistory = [];
+var aiChatInitialized = false;
+
+function aiChatEls() {
+    return {
+        drawer: document.getElementById("aiChatDrawer"),
+        backdrop: document.getElementById("aiChatBackdrop"),
+        messages: document.getElementById("aiChatMessages"),
+        summary: document.getElementById("aiChatSummary"),
+        transcriptPrompt: document.getElementById("aiChatTranscriptPrompt"),
+        input: document.getElementById("aiChatInput"),
+        sendBtn: document.getElementById("aiChatSendBtn")
+    };
+}
+
+function renderChatMessages() {
+    var els = aiChatEls();
+    if (!els.messages) return;
+    if (!aiChatHistory.length) {
+        els.messages.innerHTML = '<div class="planner-chat-empty">Open the chat to load your planning summary.</div>';
+        return;
+    }
+    var html = "";
+    for (var i = 0; i < aiChatHistory.length; i++) {
+        var msg = aiChatHistory[i];
+        var cls = msg.role === "user" ? " planner-chat-message-user" : " planner-chat-message-assistant";
+        html += '<div class="planner-chat-message' + cls + '">' +
+            '<div class="planner-chat-message-role">' + (msg.role === "user" ? "You" : "UTPB Advisor") + '</div>' +
+            '<div>' + renderChatMarkdown(msg.content) + '</div>' +
+            '</div>';
+    }
+    els.messages.innerHTML = html;
+    els.messages.scrollTop = els.messages.scrollHeight;
+}
+
+function renderChatMarkdown(value) {
+    var html = escapeHtml(value || "");
+    html = html.replace(/\*\*([^*\n][\s\S]*?[^*\n])\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\*([^*\n][^*\n]*?[^*\n])\*/g, "<em>$1</em>");
+    html = html.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    html = html.replace(/\n/g, "<br>");
+    return html;
+}
+
+function renderChatSummary(lines) {
+    var els = aiChatEls();
+    if (!els.summary) return;
+    lines = lines || [];
+    if (!lines.length) {
+        els.summary.textContent = "I will summarize your planner context after the first response.";
+        return;
+    }
+    var html = '<div class="planner-ai-label">What I know</div><ul class="mb-0 ps-3">';
+    var hasTranscript = true;
+    for (var i = 0; i < lines.length; i++) {
+        var line = String(lines[i] || "");
+        if (line.toLowerCase().indexOf("transcript: not uploaded") !== -1) hasTranscript = false;
+        html += '<li>' + escapeHtml(line) + '</li>';
+    }
+    html += "</ul>";
+    els.summary.innerHTML = html;
+    if (els.transcriptPrompt) els.transcriptPrompt.classList.toggle("d-none", hasTranscript);
+}
+
+function setChatBusy(isBusy) {
+    var els = aiChatEls();
+    if (els.sendBtn) {
+        els.sendBtn.disabled = isBusy;
+        els.sendBtn.textContent = isBusy ? "Sending..." : "Send";
+    }
+    if (els.input) els.input.disabled = isBusy;
+}
+
+function sendAiChatMessage(text, isInitial) {
+    if (text && !isInitial) {
+        aiChatHistory.push({ role: "user", content: text });
+        aiChatHistory = aiChatHistory.slice(-10);
+        renderChatMessages();
+    }
+    setChatBusy(true);
+    var outbound = aiChatHistory.slice(-10);
+    if (isInitial) {
+        outbound = [{ role: "user", content: "Summarize what you know about me, remind me what is missing, and give one next step." }];
+    }
+    return fetchJson("/api/ai/planner-advice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: outbound })
+    }).then(function (data) {
+        renderChatSummary(data.context_summary || []);
+        aiChatHistory.push({ role: "assistant", content: data.reply || data.advice || "No advice returned." });
+        if (data.warning) {
+            aiChatHistory.push({ role: "assistant", content: "Note: " + data.warning + " I showed local fallback advice instead." });
+        }
+        aiChatHistory = aiChatHistory.slice(-10);
+        renderChatMessages();
+    }).catch(function (err) {
+        aiChatHistory.push({ role: "assistant", content: err.message || "Could not reach the planner advisor right now." });
+        renderChatMessages();
+    }).finally(function () {
+        setChatBusy(false);
+        var els = aiChatEls();
+        if (els.input) els.input.focus();
+    });
+}
+
+function openAiChat() {
+    var els = aiChatEls();
+    if (!els.drawer || !els.backdrop) return;
+    els.drawer.classList.add("is-open");
+    els.drawer.setAttribute("aria-hidden", "false");
+    els.backdrop.hidden = false;
+    renderChatMessages();
+    if (!aiChatInitialized) {
+        aiChatInitialized = true;
+        sendAiChatMessage("", true);
+    } else if (els.input) {
+        els.input.focus();
+    }
+}
+
+function closeAiChat() {
+    var els = aiChatEls();
+    if (!els.drawer || !els.backdrop) return;
+    els.drawer.classList.remove("is-open");
+    els.drawer.setAttribute("aria-hidden", "true");
+    els.backdrop.hidden = true;
+}
+
 function loadPlanner() {
     fetchJson("/api/planner-overview")
         .then(function (data) {
@@ -290,6 +431,23 @@ document.addEventListener("DOMContentLoaded", function () {
             showAlert(err.message || "Could not update target.", "danger");
         });
     });
+    var aiOpenBtn = document.getElementById("aiChatOpenBtn");
+    if (aiOpenBtn) aiOpenBtn.addEventListener("click", openAiChat);
+    var aiCloseBtn = document.getElementById("aiChatCloseBtn");
+    if (aiCloseBtn) aiCloseBtn.addEventListener("click", closeAiChat);
+    var aiBackdrop = document.getElementById("aiChatBackdrop");
+    if (aiBackdrop) aiBackdrop.addEventListener("click", closeAiChat);
+    var aiForm = document.getElementById("aiChatForm");
+    if (aiForm) {
+        aiForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            var input = document.getElementById("aiChatInput");
+            var text = input ? input.value.trim() : "";
+            if (!text) return;
+            if (input) input.value = "";
+            sendAiChatMessage(text, false);
+        });
+    }
     var logoutBtn = document.getElementById("logoutBtn");
     if (logoutBtn) {
         logoutBtn.addEventListener("click", function () {

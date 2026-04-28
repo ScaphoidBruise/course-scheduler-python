@@ -1,0 +1,44 @@
+flowchart LR
+    subgraph utpb["UTPB Sources"]
+        Cat["SmartCatalog"]
+        Reg["Registrar Sections"]
+        Cal["Academic Calendar"]
+        Falcon["Falcon Maps PDFs"]
+    end
+
+    subgraph scrapers["scrapers/ — stdlib only"]
+        catalog["catalog.py"]
+        sections["sections.py"]
+        session["session_dates.py"]
+        infer["infer_terms.py"]
+        progReq["program_requirements.py"]
+    end
+
+    DB[("data/courses.db<br/>SQLite, single file")]
+
+    subgraph flask["scheduler/ — Flask app"]
+        appPy["app.py · 50+ routes"]
+        dbPy["db.py · SQL helpers"]
+        conflictPy["conflict.py"]
+        pdfPy["transcript_pdf.py · pypdf"]
+    end
+
+    subgraph browser["Browser — vanilla HTML / CSS / JS"]
+        Pages["pages/*.html"]
+        Static["static/*.js + style.css"]
+    end
+
+    AI["Anthropic Messages API<br/>optional · .env"]
+
+    Cat --> catalog --> DB
+    Reg --> sections --> DB
+    Cal --> session --> DB
+    Falcon --> infer --> DB
+    Cat --> progReq --> DB
+
+    DB <--> dbPy <--> appPy
+    appPy --- conflictPy
+    appPy --- pdfPy
+    appPy -- "JSON API" --> Static
+    Pages --> Static
+    appPy -.optional.-> AI

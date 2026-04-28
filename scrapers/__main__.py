@@ -4,7 +4,7 @@ import argparse
 import sys
 from types import SimpleNamespace
 
-from . import catalog, infer_terms, sections, session_dates
+from . import catalog, infer_terms, program_requirements, sections, session_dates
 
 
 def _run_sync(args: argparse.Namespace) -> None:
@@ -57,6 +57,7 @@ def _print_root_help(exit_code: int = 0) -> None:
         "\nCommands:\n"
         "  sync           Full pipeline: catalog --all-subjects, infer-terms, sections, session-dates\n"
         "  catalog        SmartCatalog -> courses table\n"
+        "  program-requirements  SmartCatalog Programs of Study -> reviewable requirement tables\n"
         "  infer-terms    Degree map PDFs -> term_infered on courses\n"
         "  sections       Registrar schedules -> sections table\n"
         "  session-dates  Academic calendar -> session_calendar\n"
@@ -90,6 +91,9 @@ def main() -> None:
 
     if cmd == "catalog":
         catalog.main(rest)
+        return
+    if cmd == "program-requirements":
+        program_requirements.main(rest)
         return
     if cmd == "infer-terms":
         infer_terms.main(rest)

@@ -40,8 +40,8 @@ body {
 
 .main-nav .nav-link {
     color: var(--text-muted);
-    font-size: 0.88rem;
-    padding: 0.5rem 0.9rem;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.6rem;
     border-radius: 6px;
     transition: color 0.15s, background 0.15s;
 }
@@ -415,6 +415,46 @@ body {
     margin-bottom: 0.75rem !important;
 }
 
+.schedule-prereq-prompt {
+    background: rgba(220, 53, 69, 0.07);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+    border-left: 4px solid #dc3545;
+    border-radius: 10px;
+    color: #842029;
+    font-size: 0.86rem;
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.8rem;
+}
+
+.schedule-prereq-prompt a {
+    color: #842029;
+    font-weight: 700;
+}
+
+.schedule-prereq-list {
+    margin-top: 0.3rem;
+}
+
+.transcript-section-match {
+    background: var(--card-bg);
+    border: 1px solid rgba(10, 22, 40, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(10, 22, 40, 0.04);
+    padding: 0.9rem;
+}
+
+.transcript-section-card {
+    background: var(--surface);
+    border: 1px solid rgba(10, 22, 40, 0.08);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 0.75rem;
+}
+
+.transcript-section-card .form-select {
+    min-width: min(100%, 24rem);
+}
+
 /* === Weekly Grid === */
 .grid-wrapper {
     background: var(--card-bg);
@@ -659,10 +699,6 @@ body {
 
 .scenario-actions .btn {
     font-weight: 600;
-}
-
-.share-page .schedule-edit-col {
-    display: none;
 }
 
 .term-picker-block .term-picker-heading {
@@ -1024,6 +1060,261 @@ select.term-plan-select option {
     background: var(--card-bg);
 }
 
+.progress-card-audit {
+    border-left: 3px solid var(--navy-mid) !important;
+}
+
+.progress-card-add {
+    border-left: 3px solid #f59e0b !important;
+}
+
+.progress-audit-summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.4rem;
+}
+
+.progress-audit-chip,
+.progress-audit-status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid rgba(10, 22, 40, 0.1);
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.36rem 0.62rem;
+}
+
+.progress-audit-chip-complete,
+.progress-audit-status-complete {
+    border-color: rgba(56, 161, 105, 0.28);
+    background: rgba(56, 161, 105, 0.1);
+    color: #166534;
+}
+
+.progress-audit-chip-partial,
+.progress-audit-status-partial {
+    border-color: rgba(59, 130, 246, 0.28);
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+}
+
+.progress-audit-chip-choice,
+.progress-audit-status-choose {
+    border-color: rgba(245, 158, 11, 0.32);
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+}
+
+.progress-audit-status-optional {
+    border-color: rgba(100, 116, 139, 0.22);
+    background: rgba(100, 116, 139, 0.08);
+    color: #64748b;
+}
+
+.progress-audit-list {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.progress-audit-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 0.75rem;
+    background: rgba(10, 22, 40, 0.055);
+    color: var(--navy-deep);
+    font-size: 0.82rem;
+    font-weight: 850;
+    letter-spacing: 0.035em;
+    padding: 0.65rem 0.8rem;
+    text-transform: uppercase;
+}
+
+.progress-audit-section-title strong {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #fff;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0;
+    padding: 0.25rem 0.55rem;
+    text-transform: none;
+}
+
+.progress-audit-block {
+    border: 1px solid rgba(10, 22, 40, 0.08);
+    border-radius: 0.8rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+    padding: 0.9rem;
+    box-shadow: 0 1px 2px rgba(10, 22, 40, 0.03);
+}
+
+.progress-audit-block-complete {
+    border-color: rgba(56, 161, 105, 0.24);
+}
+
+.progress-audit-block-partial {
+    border-color: rgba(59, 130, 246, 0.22);
+}
+
+.progress-audit-block-choose {
+    border-color: rgba(245, 158, 11, 0.28);
+}
+
+.progress-audit-block-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 0.7rem;
+}
+
+.progress-audit-block-title {
+    color: var(--navy-deep);
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.progress-audit-block-meta {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 0.18rem;
+}
+
+.progress-audit-course-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.progress-audit-course-list {
+    display: grid;
+    border: 1px solid rgba(10, 22, 40, 0.065);
+    border-radius: 0.7rem;
+    overflow: hidden;
+}
+
+.progress-audit-course-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: #fff;
+    border-bottom: 1px solid rgba(10, 22, 40, 0.055);
+    padding: 0.68rem 0.78rem;
+}
+
+.progress-audit-course-row:last-child {
+    border-bottom: 0;
+}
+
+.progress-audit-course-row.progress-audit-course-completed {
+    background: rgba(56, 161, 105, 0.045);
+}
+
+.progress-audit-course-row.progress-audit-course-in_progress {
+    background: rgba(59, 130, 246, 0.045);
+}
+
+.progress-audit-choice-summary {
+    border: 1px dashed rgba(245, 158, 11, 0.34);
+    border-radius: 0.7rem;
+    background: rgba(245, 158, 11, 0.06);
+    margin-bottom: 0.6rem;
+    padding: 0.7rem 0.8rem;
+}
+
+.progress-audit-choice-main {
+    color: #92400e;
+    font-size: 0.86rem;
+    font-weight: 850;
+    line-height: 1.25;
+}
+
+.progress-audit-choice-meta {
+    color: #64748b;
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 0.12rem;
+}
+
+.progress-audit-course {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 100%;
+    border-radius: 999px;
+    border: 1px solid rgba(10, 22, 40, 0.12);
+    background: #fff;
+    padding: 0.28rem 0.56rem;
+    font-size: 0.76rem;
+}
+
+.progress-audit-course-code {
+    color: var(--navy-deep);
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.progress-audit-course-title {
+    color: #64748b;
+    font-size: 0.78rem;
+    line-height: 1.25;
+    margin-top: 0.1rem;
+}
+
+.progress-audit-course-status {
+    color: var(--text-muted);
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.progress-audit-course-completed {
+    border-color: rgba(56, 161, 105, 0.26);
+    background: rgba(56, 161, 105, 0.08);
+}
+
+.progress-audit-course-in_progress {
+    border-color: rgba(59, 130, 246, 0.26);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.progress-audit-course-remaining {
+    border-color: rgba(10, 22, 40, 0.1);
+    background: #fff;
+}
+
+.progress-audit-empty {
+    border: 1px dashed rgba(10, 22, 40, 0.16);
+    border-radius: 0.75rem;
+    background: #fbfcfe;
+    padding: 1rem;
+}
+
+#progressCourseSearchResults {
+    max-height: 22rem;
+    overflow-y: auto;
+}
+
+.progress-course-result-action {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+.progress-course-result-action select {
+    width: 7rem;
+}
+
 .progress-card-completed {
     border-left: 3px solid var(--success-green) !important;
 }
@@ -1058,16 +1349,210 @@ select.term-plan-select option {
 }
 
 .progress-remaining-pill {
+    display: inline-block;
     border-radius: 999px;
     font-weight: 600;
     padding: 0.22rem 0.7rem;
 }
 
-.progress-remaining-pill:hover,
-.progress-remaining-pill:focus {
+.progress-remaining-pill-static {
+    color: #374151;
+    border: 1px solid rgba(10, 22, 40, 0.14);
+    background: #fff;
+}
+
+.progress-remaining-pill:not(.progress-remaining-pill-static):hover,
+.progress-remaining-pill:not(.progress-remaining-pill-static):focus {
     border-color: var(--accent);
     color: var(--accent);
     background: rgba(232, 86, 42, 0.08);
+}
+
+.progress-remaining-overview {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.progress-remaining-reference-list {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.progress-remaining-section {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.progress-remaining-section + .progress-remaining-section {
+    margin-top: 0.45rem;
+}
+
+.progress-remaining-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--navy-deep);
+    font-size: 0.78rem;
+    font-weight: 850;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.progress-remaining-section-credits {
+    border-radius: 999px;
+    background: rgba(10, 22, 40, 0.06);
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    padding: 0.2rem 0.5rem;
+    text-transform: none;
+}
+
+.progress-remaining-section-title::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: rgba(10, 22, 40, 0.08);
+}
+
+.progress-remaining-reference-card {
+    border: 1px solid rgba(10, 22, 40, 0.08);
+    border-radius: 0.85rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.progress-remaining-reference-choice {
+    border-color: rgba(245, 158, 11, 0.28);
+}
+
+.progress-remaining-reference-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    background: linear-gradient(135deg, #fbfcfe 0%, #f8fafc 100%);
+    border-bottom: 1px solid rgba(10, 22, 40, 0.06);
+}
+
+.progress-remaining-reference-choice .progress-remaining-reference-head {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.11) 0%, rgba(245, 158, 11, 0.045) 100%);
+}
+
+.progress-remaining-reference-title {
+    color: var(--navy-deep);
+    font-size: 0.92rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.progress-remaining-reference-meta {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.18rem;
+}
+
+.progress-remaining-course-list {
+    display: grid;
+}
+
+.progress-remaining-choice-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid rgba(245, 158, 11, 0.18);
+    background: rgba(245, 158, 11, 0.045);
+    padding: 0.78rem 0.9rem;
+}
+
+.progress-remaining-choice-status {
+    color: var(--navy-deep);
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.progress-remaining-choice-meta {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 0.12rem;
+}
+
+.progress-remaining-course-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid rgba(10, 22, 40, 0.055);
+}
+
+.progress-remaining-course-row:last-child {
+    border-bottom: 0;
+}
+
+.progress-remaining-course-row-completed {
+    background: rgba(56, 161, 105, 0.045);
+}
+
+.progress-remaining-course-row-in_progress {
+    background: rgba(59, 130, 246, 0.045);
+}
+
+.progress-remaining-course-code {
+    color: var(--navy-deep);
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.progress-remaining-course-title {
+    color: #64748b;
+    font-size: 0.78rem;
+    line-height: 1.25;
+    margin-top: 0.1rem;
+}
+
+.progress-remaining-status-badge {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    border: 1px solid rgba(10, 22, 40, 0.1);
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 800;
+    line-height: 1;
+    padding: 0.32rem 0.55rem;
+}
+
+.progress-remaining-status-completed {
+    border-color: rgba(56, 161, 105, 0.26);
+    background: rgba(56, 161, 105, 0.1);
+    color: #166534;
+}
+
+.progress-remaining-status-in-progress {
+    border-color: rgba(59, 130, 246, 0.26);
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+}
+
+.progress-reference-mark-complete {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.progress-remaining-empty {
+    border: 1px dashed rgba(10, 22, 40, 0.16);
+    border-radius: 0.75rem;
+    background: #fbfcfe;
+    padding: 1rem;
 }
 
 .progress-remaining-accordion .accordion-button {
@@ -1088,5 +1573,6 @@ select.term-plan-select option {
 .progress-popover-form .progress-popover-grade {
     width: 100%;
 }
+
 /* === END PROGRESS PAGE === */
 

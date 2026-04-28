@@ -22,12 +22,27 @@
 
 .planner-progress {
     height: 0.65rem;
-    max-width: 42rem;
+    flex: 1;
     background: rgba(10, 22, 40, 0.08);
 }
 
 .planner-progress-bar {
     background: linear-gradient(90deg, var(--accent), #f59e0b);
+}
+
+.planner-progress-wrap {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    max-width: 42rem;
+}
+
+.planner-progress-label {
+    color: var(--navy-deep);
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 2.5rem;
 }
 
 .planner-target-form {
@@ -120,6 +135,126 @@
     border: 1px dashed rgba(10, 22, 40, 0.16);
     border-radius: 0.8rem;
     padding: 1rem;
+}
+
+.planner-ai-launch {
+    border-left: 4px solid #6366f1 !important;
+}
+
+.planner-ai-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+}
+
+.planner-chat-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(10, 22, 40, 0.35);
+}
+
+.planner-chat-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 28rem);
+    height: 100vh;
+    background: #fff;
+    box-shadow: -0.8rem 0 2rem rgba(10, 22, 40, 0.18);
+    transform: translateX(105%);
+    transition: transform 180ms ease;
+}
+
+.planner-chat-drawer.is-open {
+    transform: translateX(0);
+}
+
+.planner-chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(10, 22, 40, 0.08);
+}
+
+.planner-chat-summary,
+.planner-chat-prompt {
+    margin: 1rem 1rem 0;
+    padding: 0.8rem;
+    border-radius: 0.8rem;
+}
+
+.planner-chat-summary {
+    background: rgba(99, 102, 241, 0.06);
+    border: 1px solid rgba(99, 102, 241, 0.18);
+}
+
+.planner-chat-prompt {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+}
+
+.planner-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.planner-chat-empty {
+    color: var(--text-muted);
+    border: 1px dashed rgba(10, 22, 40, 0.16);
+    border-radius: 0.8rem;
+    padding: 0.9rem;
+}
+
+.planner-chat-message {
+    max-width: 88%;
+    margin-bottom: 0.8rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.9rem;
+    line-height: 1.45;
+    white-space: normal;
+}
+
+.planner-chat-message-user {
+    margin-left: auto;
+    color: #fff;
+    background: var(--accent);
+}
+
+.planner-chat-message-assistant {
+    margin-right: auto;
+    color: var(--navy-deep);
+    background: rgba(10, 22, 40, 0.06);
+}
+
+.planner-chat-message-role {
+    font-size: 0.72rem;
+    font-weight: 700;
+    opacity: 0.75;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.planner-chat-form {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.65rem;
+    padding: 1rem;
+    border-top: 1px solid rgba(10, 22, 40, 0.08);
+}
+
+.planner-chat-form textarea {
+    resize: none;
 }
 
 .planner-chart-wrap {

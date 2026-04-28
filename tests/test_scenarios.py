@@ -171,7 +171,7 @@ class ScenarioApiTest(unittest.TestCase):
             self.assertEqual(scenario["is_active"], 1)
             self.assertEqual(saved["scenario_id"], scenario["id"])
 
-    def test_scenario_lifecycle_export_and_share(self):
+    def test_scenario_lifecycle_and_export(self):
         register = self.client.post(
             "/api/register",
             json={
@@ -218,16 +218,6 @@ class ScenarioApiTest(unittest.TestCase):
         self.assertIn("RRULE:FREQ=WEEKLY", text)
         self.assertIn("COSC 3320", text)
         self.assertNotIn("MATH 2413", text)
-
-        shared = self.client.post(f"/api/scenarios/{scenario_id}/share")
-        self.assertEqual(shared.status_code, 200)
-        token = shared.get_json()["share_token"]
-
-        anon = self.app_module.app.test_client()
-        page = anon.get(f"/share/{token}")
-        self.assertEqual(page.status_code, 200)
-        self.assertIn("Read-only shared schedule", page.get_data(as_text=True))
-        self.assertIn("Plan A", page.get_data(as_text=True))
 
 
 if __name__ == "__main__":
