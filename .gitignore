@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 data/archive/
+data/uploads/
+
 data/program_requirements_review.json
 .env
 .env.*
