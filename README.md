@@ -74,6 +74,34 @@ are handled separately so they will not false-flag each other.
 
 There is a catalog page to browse all courses, a profile page (transcript import for GPA/course lists), plus about/help pages.
 
+## Planner dashboard
+
+The Planner page at `/planner` shows every saved term plan in one graduation-focused view. It summarizes completed, planned, and target credits, estimates a graduation term, flags term conflicts, and charts credits per term without any external chart library.
+
+## Multiple schedules & sharing
+
+Each term can have multiple named schedule scenarios. The active scenario is what the older `/api/my-schedule` endpoint reads and writes, so existing clients still work while the UI can create, duplicate, rename, delete, and switch plans.
+
+Use **Export .ics** to download calendar events for in-person meeting times. Use **Copy share link** to create a public read-only snapshot URL for the selected scenario.
+
+## Running tests
+
+```bash
+python tests/test_scenarios.py
+```
+
+## Degree progress & prereq awareness
+
+After a transcript is imported, the Profile page uses parsed course history to show completed, in-progress, and still-needed courses for the detected program subjects. You can manually mark a remaining course as completed for transfer or parser misses, and the GPA what-if card projects cumulative GPA from saved schedule courses and selected grades.
+
+The Schedule page checks visible section cards against completed transcript courses and manual overrides. When catalog prerequisite text can be parsed as `SUBJ ####` course requirements, missing prerequisites appear as red chips; free-text-only requirements such as instructor consent are treated as unparseable instead of blocking.
+
+## Catalog detail & wishlist
+
+The catalog page supports subject, level, typical-term, and text filters. Course rows open a detail modal with prerequisites, catalog link, and all known sections across terms with session dates from `session_calendar`.
+
+Signed-in users can add catalog courses to a personal wishlist. Wishlist rows are stored in `course_wishlist` and also appear on the profile page below Past & current credits.
+
 ## How it's built
 
 Flask serves the HTML pages and a JSON API. The frontend is plain HTML, CSS,
@@ -106,5 +134,6 @@ Everything lives in `data/courses.db`:
 - **sections** — term, section code, days, times, location, mode, session
 - **session_calendar** — start/end dates per session per term
 - **users** — accounts (hashed passwords)
-- **user_schedules** — saved section ids per user and term
+- **schedule_scenarios** — named schedule scenarios per user and term, including share tokens
+- **user_schedules** — saved section ids per user, term, and scenario
 - **user_profiles** — major, minor, original upload name (`transcript_original_name`), and **`transcript_parsed_json`** (parsed GPA, credits, course rows, etc.; the PDF itself is not kept on disk)

@@ -19,6 +19,7 @@
                     <li class="nav-item"><a class="nav-link active" href="/">Schedule</a></li>
                     <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
                     <li class="nav-item"><a class="nav-link" href="/profile">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/planner">Planner</a></li>
                     <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
                 </ul>
@@ -34,15 +35,58 @@
         <div class="container-fluid px-4 py-3">
             <div id="alertBox"></div>
 
-            <div class="row g-3">
-                <!-- LEFT: Section Picker -->
-                <div class="col-lg-4 col-xl-3">
+            <div class="row g-3 schedule-layout-row">
+                <!-- LEFT: filters + hits (narrow; height follows content — calendar owns vertical space) -->
+                <div class="col-12 col-lg-4 col-xl-3 schedule-layout-col-picker">
                     <div class="picker-panel">
-                        <div class="mb-2">
-                            <label class="filter-label">Term</label>
-                            <select id="termSelect" class="form-select form-select-sm"></select>
+                        <div class="mb-3 scenario-picker-block">
+                            <label for="scenarioSelect" class="form-label fw-semibold text-body small mb-1">Scenario</label>
+                            <div class="scenario-select-shell">
+                                <select id="scenarioSelect" class="form-select form-select-sm" aria-label="Saved schedule scenario"></select>
+                            </div>
+                            <div class="d-flex flex-wrap gap-1 mt-2 scenario-actions">
+                                <button type="button" class="btn btn-outline-accent btn-xs" id="newScenarioBtn">New</button>
+                                <button type="button" class="btn btn-outline-secondary btn-xs" id="duplicateScenarioBtn">Duplicate</button>
+                                <button type="button" class="btn btn-outline-secondary btn-xs" id="renameScenarioBtn">Rename</button>
+                                <button type="button" class="btn btn-outline-danger btn-xs" id="deleteScenarioBtn">Delete</button>
+                            </div>
                         </div>
-                        <div id="termDates" class="term-date-banner d-none"></div>
+                        <div class="mb-3 term-picker-block">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-1 mb-1">
+                                <span class="term-picker-heading">Schedule</span>
+                                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end term-picker-meta">
+                                    <span id="currentTermHint" class="current-term-badge" hidden aria-live="polite"></span>
+                                    <button type="button" class="btn btn-link btn-sm p-0 term-jump-link" id="jumpCurrentTerm" hidden>Jump to current semester</button>
+                                </div>
+                            </div>
+                            <p class="term-picker-microcopy mb-2">Pick a term to plan your schedule. Past semesters below are view-only.</p>
+                            <label for="termSelectCompat" class="form-label fw-semibold text-body small mb-1">Planning term</label>
+                            <div class="term-select-shell">
+                                <select id="termSelectCompat" class="form-select term-plan-select" aria-label="Term for schedule planning"></select>
+                            </div>
+                            <div class="d-none d-md-block w-100 term-timeline-chips-wrap mt-2">
+                                <div id="termPickerScroll" class="term-timeline-scroll" role="listbox" aria-label="Planning terms by year" tabindex="0"></div>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2 d-none past-credits-btn position-relative text-start px-3 py-2" id="pastCreditsBtn"
+                                    data-bs-toggle="collapse" data-bs-target="#pastCreditsCollapse" aria-expanded="false" aria-controls="pastCreditsCollapse">
+                                <span class="past-credits-btn-title">Past semesters &amp; transcript</span>
+                                <span class="text-muted past-credits-btn-hint small d-block">Completed terms, GPA context — open for a read-only overview</span>
+                            </button>
+                            <div class="collapse past-credits-collapse mt-2" id="pastCreditsCollapse">
+                                <div class="card card-body past-credits-card py-2 px-3">
+                                    <p class="small text-muted mb-2 mb-0">These terms are before your current planning window. Full grades and GPA live on <a href="/profile">Profile</a> after you import a transcript.</p>
+                                    <ul class="list-unstyled mb-0 small past-credits-list" id="pastCreditsList"></ul>
+                                </div>
+                            </div>
+                            <input type="hidden" id="termValue" name="term" value="">
+                        </div>
+                        <div id="pastTermPickerNotice" class="alert alert-light border past-term-picker-hint mb-3 d-none" role="status">
+                            <span class="fw-semibold text-body">Completed term selected.</span>
+                            Browse sections below only when a current or future planning term is selected.
+                            <button type="button" class="btn btn-sm btn-accent ms-lg-2 mt-2 mt-lg-0 align-baseline d-none" id="jumpFromPastToPlanning">Jump to planning calendar</button>
+                        </div>
+                        <div id="termDates" class="term-date-banner d-none mb-2"></div>
+                        <div id="planningControlsWrap">
                         <div class="mb-2">
                             <label class="filter-label">Search</label>
                             <input type="text" id="searchInput" class="form-control form-control-sm"
@@ -79,45 +123,66 @@
                         <div id="sectionResults" class="section-results">
                             <p class="text-muted small">Select a term to see sections.</p>
                         </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- RIGHT: Calendar + Added List -->
-                <div class="col-lg-8 col-xl-9">
-                    <div id="summaryBar" class="d-flex justify-content-between align-items-center mb-2">
-                        <div>
-                            <span class="fw-bold" id="termLabel"></span>
-                            <span class="mx-1 text-muted">&middot;</span>
-                            <span class="fw-bold" id="sectionCount">0</span>
-                            <span class="text-muted small">sections</span>
-                            <span class="mx-1 text-muted">&middot;</span>
-                            <span class="fw-bold" id="creditCount">0.0</span>
-                            <span class="text-muted small">credit hrs</span>
-                            <span id="conflictBadge" class="mx-1 d-none">
+                <div class="col-12 col-lg-8 col-xl-9 min-w-0">
+                    <div id="schedulePlanningMain">
+                        <div id="summaryBar" class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <div>
+                                <span class="fw-bold" id="termLabel"></span>
                                 <span class="mx-1 text-muted">&middot;</span>
-                                <span class="text-danger fw-bold small" id="conflictText"></span>
-                            </span>
+                                <span class="fw-bold" id="sectionCount">0</span>
+                                <span class="text-muted small">sections</span>
+                                <span class="mx-1 text-muted">&middot;</span>
+                                <span class="fw-bold" id="creditCount">0.0</span>
+                                <span class="text-muted small">credit hrs</span>
+                                <span id="conflictBadge" class="mx-1 d-none">
+                                    <span class="mx-1 text-muted">&middot;</span>
+                                    <span class="text-danger fw-bold small" id="conflictText"></span>
+                                </span>
+                                <span id="prereqChip" class="mx-1 d-none"></span>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button id="exportIcsBtn" class="btn btn-outline-secondary btn-sm" type="button">Export .ics</button>
+                                <button id="copyShareLinkBtn" class="btn btn-outline-secondary btn-sm" type="button">Copy share link</button>
+                                <button id="clearBtn" class="btn btn-outline-danger btn-sm d-none" type="button">Clear All</button>
+                            </div>
                         </div>
-                        <button id="clearBtn" class="btn btn-outline-danger btn-sm d-none">Clear All</button>
+
+                        <div class="grid-wrapper">
+                            <div class="weekly-grid" id="weeklyGrid"></div>
+                        </div>
+
+                        <div id="addedTableWrap" class="mt-3 d-none">
+                            <h6>Added Sections</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm section-table align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th></th><th>Course</th><th>Title</th><th>&sect;</th>
+                                            <th>Session</th><th>Dates</th><th>Days</th><th>Time</th>
+                                            <th>Location</th><th>Mode</th><th>Hrs</th><th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="addedBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="grid-wrapper">
-                        <div class="weekly-grid" id="weeklyGrid"></div>
-                    </div>
-
-                    <div id="addedTableWrap" class="mt-3 d-none">
-                        <h6>Added Sections</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm section-table align-middle">
-                                <thead>
-                                    <tr>
-                                        <th></th><th>Course</th><th>Title</th><th>&sect;</th>
-                                        <th>Session</th><th>Dates</th><th>Days</th><th>Time</th>
-                                        <th>Location</th><th>Mode</th><th>Hrs</th><th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="addedBody"></tbody>
-                            </table>
+                    <div id="pastTermRecordView" class="d-none">
+                        <div id="pastTermRecordHeaderRow" class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <h2 class="h5 mb-1 text-body" id="pastTermRecordTitle">Courses on transcript</h2>
+                                <p id="pastTermRecordSub" class="text-muted small mb-0"></p>
+                            </div>
+                            <span class="badge rounded-pill past-term-record-badge"><span aria-hidden="true">&bull;</span> Read-only transcript</span>
+                        </div>
+                        <div class="past-term-record-shell card border-0 shadow-sm">
+                            <div id="pastTermRecordBody" class="card-body p-md-4"></div>
                         </div>
                     </div>
                 </div>
@@ -127,5 +192,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/schedule.js"></script>
+    <script src="/static/prereq_check.js"></script>
 </body>
 </html>

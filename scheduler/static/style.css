@@ -91,6 +91,191 @@ body {
     color: var(--accent);
 }
 
+.profile-program-card .profile-combobox-input {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(0, 63, 110, 0.15);
+}
+
+.profile-program-card .profile-combobox-input:focus {
+    border-color: rgba(232, 86, 42, 0.45);
+    box-shadow: 0 0 0 3px rgba(232, 86, 42, 0.12);
+}
+
+.profile-combobox-menu {
+    z-index: 1080;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 14rem;
+    margin-top: 0 !important;
+}
+
+.profile-combobox-item.active {
+    background: rgba(232, 86, 42, 0.12);
+    color: inherit;
+}
+
+.profile-field-status {
+    min-height: 1.1rem;
+}
+
+.profile-program-cards-row > .profile-program-card .card-body {
+    min-height: 8rem;
+}
+
+.profile-program-field-btn.btn-sm {
+    padding: 0.2rem 0.65rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    border-radius: 0.375rem;
+}
+
+.profile-program-card .profile-program-display {
+    border: 1px solid rgba(10, 22, 40, 0.065);
+    background: linear-gradient(165deg, #ffffff 0%, #fdfdfd 55%, #fafbfc 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 1px 2px rgba(10, 22, 40, 0.02);
+    min-height: 3rem;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        background 0.2s ease;
+}
+
+.profile-program-card .profile-program-display-empty {
+    border-style: dashed;
+    border-color: rgba(10, 22, 40, 0.092);
+    background: linear-gradient(165deg, #fefefe 0%, #fcfcfc 55%, #f9fafb 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.profile-program-display-text {
+    color: var(--navy-deep);
+    font-size: 1.02rem;
+    font-weight: 600;
+    letter-spacing: 0.015em;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.profile-program-display-text-empty {
+    font-style: italic;
+    font-weight: 500 !important;
+    font-size: 0.92rem !important;
+    color: var(--text-muted) !important;
+    letter-spacing: 0 !important;
+}
+
+/* Current enrollment course rows */
+.profile-enrollment-course-list .profile-enrollment-course-item {
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.65rem !important;
+    border-color: rgba(10, 22, 40, 0.06) !important;
+}
+
+.profile-enrollment-meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    row-gap: 0.25rem;
+    max-width: min(100%, 11rem);
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+
+.profile-enrollment-credits-pill {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.32rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(10, 22, 40, 0.045);
+    border: 1px solid rgba(10, 22, 40, 0.07);
+}
+
+.profile-enrollment-credits-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    font-size: 0.92rem;
+    color: var(--navy-deep);
+}
+
+.profile-enrollment-credits-word {
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    text-transform: capitalize;
+    color: var(--text-muted);
+}
+
+.profile-enrollment-dot {
+    opacity: 0.42;
+    font-weight: 300;
+}
+
+.profile-enrollment-grade {
+    font-size: 0.84rem;
+    color: var(--navy-deep);
+    font-variant-numeric: tabular-nums;
+}
+
+.profile-grade-in-progress {
+    font-style: italic;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.degree-progress-list {
+    min-height: 2rem;
+}
+
+.degree-course-pill {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(10, 22, 40, 0.1);
+    border-radius: 999px;
+    background: #f8fafc;
+    color: var(--navy-deep);
+    font-weight: 600;
+    padding: 0.22rem 0.55rem;
+    line-height: 1.2;
+}
+
+.degree-course-pill-btn {
+    cursor: pointer;
+}
+
+.degree-course-pill-btn:hover,
+.degree-course-pill-btn:focus {
+    border-color: rgba(232, 86, 42, 0.55);
+    background: rgba(232, 86, 42, 0.08);
+}
+
+.degree-grade-select,
+.gpa-whatif-grade {
+    max-width: 8rem;
+}
+
+.degree-season-heading {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+}
+
+.gpa-whatif-summary {
+    background: #f8fafc;
+    border: 1px solid rgba(10, 22, 40, 0.08);
+}
+
 .text-navy-deep {
     color: var(--navy-deep);
 }
@@ -129,14 +314,20 @@ body {
     font-size: 0.72rem;
 }
 
+/* === Schedule layout: tools column stays content-sized (calendar dominates height) ===
+ * Align flex-start so the narrow column is not stretched to match a tall weekly grid.
+ * Page scroll ties both columns naturally; section hits scroll only inside .section-results. */
+.schedule-layout-row {
+    align-items: flex-start;
+}
+
 /* === Filter Panel (left side) === */
+/* Sidebar scroll = page scroll; keep inner scroll only on long section-result lists below. */
 .picker-panel {
     background: var(--card-bg);
     border-radius: 8px;
     padding: 0.8rem;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-    max-height: calc(100vh - 80px);
-    overflow-y: auto;
 }
 
 .filter-label {
@@ -151,7 +342,7 @@ body {
 
 /* === Section Cards (in picker) === */
 .section-results {
-    max-height: 55vh;
+    max-height: min(42vh, 22rem);
     overflow-y: auto;
 }
 
@@ -166,6 +357,25 @@ body {
 
 .section-card:hover {
     border-left-color: var(--accent);
+}
+
+.prereq-missing-chip {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 0.45rem;
+    border: 1px solid rgba(220, 53, 69, 0.22);
+    border-radius: 999px;
+    background: rgba(220, 53, 69, 0.08);
+    color: #b02a37;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.16rem 0.5rem;
+}
+
+.prereq-summary-chip {
+    color: #b02a37;
+    font-size: 0.82rem;
+    font-weight: 700;
 }
 
 .section-card-added {
@@ -202,26 +412,61 @@ body {
     color: #D97706;
 }
 
+/* === Schedule planning column === */
+#schedulePlanningMain {
+    padding-bottom: 0.25rem;
+}
+
+#schedulePlanningMain #summaryBar {
+    margin-bottom: 0.75rem !important;
+}
+
 /* === Weekly Grid === */
 .grid-wrapper {
     background: var(--card-bg);
-    border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--grid-line);
+    border-radius: 12px;
+    box-shadow:
+        0 1px 2px rgba(10, 22, 40, 0.04),
+        0 4px 16px rgba(10, 22, 40, 0.06);
     overflow-x: auto;
+    padding: 0.75rem 1rem 1rem;
 }
 
 .weekly-grid {
     display: flex;
+    align-items: stretch;
+    min-width: 0;
 }
 
 .grid-time-col {
-    width: 64px;
-    min-width: 64px;
+    width: 4.75rem;
+    min-width: 4.75rem;
+    flex-shrink: 0;
+    background: linear-gradient(90deg, #f8fafc 0%, #ffffff 100%);
     border-right: 1px solid var(--grid-line);
+    border-radius: 8px 0 0 8px;
+    overflow: hidden;
 }
 
 .time-header {
-    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.375rem;
+    height: 2.375rem;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+    border-bottom: 1px solid var(--grid-line);
+}
+
+.time-header-text {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--navy-mid);
+    line-height: 1;
 }
 
 .time-body {
@@ -234,31 +479,43 @@ body {
     border-right: 1px solid var(--grid-line-faint);
 }
 
+.grid-day-col:first-of-type {
+    border-radius: 0;
+}
+
 .grid-day-col:last-child {
     border-right: none;
+    border-radius: 0 8px 8px 0;
+    overflow: hidden;
 }
 
 .day-header {
     text-align: center;
     font-weight: 600;
-    font-size: 0.8rem;
-    padding: 6px 0;
-    background: var(--navy-deep);
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    padding: 0 0.25rem;
+    background: linear-gradient(180deg, var(--navy-mid) 0%, var(--navy-deep) 100%);
     color: var(--text-light);
-    border-bottom: 1px solid var(--grid-line);
-    height: 32px;
-    line-height: 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    min-height: 2.375rem;
+    height: 2.375rem;
+    line-height: 2.375rem;
+    box-sizing: border-box;
 }
 
 .day-body {
     position: relative;
+    background: #fafbfc;
 }
 
 .hour-label {
     position: absolute;
-    right: 6px;
-    font-size: 0.65rem;
-    color: var(--text-muted);
+    right: 0.5rem;
+    font-size: 0.68rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: #64748b;
     transform: translateY(-50%);
     white-space: nowrap;
 }
@@ -392,14 +649,329 @@ body {
     border-radius: 6px;
 }
 
+/* === Term planner (schedule) — dropdown + chips + past archives === */
+.scenario-picker-block {
+    border: 1px solid rgba(10, 22, 40, 0.08);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    padding: 0.65rem;
+}
+
+.scenario-select-shell select {
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.scenario-actions .btn {
+    font-weight: 600;
+}
+
+.share-page .schedule-edit-col {
+    display: none;
+}
+
+.term-picker-block .term-picker-heading {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--navy-deep);
+    letter-spacing: 0.02em;
+}
+
+.term-picker-microcopy {
+    font-size: 0.73rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+
+.term-picker-meta {
+    font-size: 0.78rem;
+}
+
+.term-select-shell select.term-plan-select {
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 8px;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-color: #ced4da;
+}
+
+select.term-plan-select optgroup {
+    font-weight: 700;
+    font-size: 0.71rem;
+    color: var(--text-muted);
+    font-style: normal;
+    padding-top: 0.35rem;
+}
+
+select.term-plan-select option {
+    font-weight: 400;
+    font-size: 0.813rem;
+}
+
+.past-credits-btn {
+    border-radius: 8px !important;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.past-credits-btn:not(.collapsed) {
+    border-color: rgba(232, 86, 42, 0.5);
+    background: rgba(232, 86, 42, 0.05);
+}
+
+.past-credits-btn-title {
+    font-weight: 600;
+    color: var(--navy-deep);
+}
+
+.past-credits-btn-hint {
+    font-size: 0.72rem;
+    line-height: 1.3;
+}
+
+.past-credits-collapse .past-credits-card {
+    border: 1px solid var(--grid-line);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.past-credits-list .past-credits-item:last-child {
+    padding-bottom: 0 !important;
+}
+
+.current-term-badge {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--navy-deep);
+    background: rgba(232, 86, 42, 0.12);
+    border: 1px solid rgba(232, 86, 42, 0.28);
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    line-height: 1.2;
+}
+
+/* === Term calendar strip (schedule page) === */
+.term-timeline-scroll {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.7rem;
+    align-items: stretch;
+    max-width: 100%;
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    padding: 0.4rem 0.35rem 0.55rem;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    border: 1px solid var(--grid-line);
+    border-radius: 8px;
+    background: var(--card-bg);
+    scrollbar-width: thin;
+}
+.term-timeline-scroll:focus {
+    outline: 2px solid rgba(232, 86, 42, 0.35);
+    outline-offset: 1px;
+}
+.term-year-block {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 0.3rem;
+    min-width: 5.5rem;
+}
+.term-year-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 0 0.1rem;
+}
+.term-year-chips {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.term-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.2;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: var(--navy-deep);
+    padding: 0.3rem 0.45rem 0.35rem;
+    font-size: 0.76rem;
+    margin: 0;
+    text-align: left;
+    width: 100%;
+    transition: box-shadow 0.12s, border-color 0.12s, background 0.12s, transform 0.1s;
+}
+.term-chip:hover {
+    border-color: var(--accent);
+    background: rgba(232, 86, 42, 0.06);
+}
+.term-chip.active {
+    border-color: var(--accent);
+    background: rgba(232, 86, 42, 0.14);
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.term-chip-semrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.25rem;
+    line-height: 1.25;
+    width: 100%;
+}
+.term-chip-sem-year {
+    font-weight: 700;
+    color: var(--navy-deep);
+}
+.term-chip-pipe {
+    font-weight: 400;
+    opacity: 0.55;
+}
+.term-chip-status {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--navy-mid);
+    text-transform: none;
+    letter-spacing: 0.01em;
+}
+.term-chip-now .term-chip-status {
+    color: #047857;
+}
+.term-chip-projected .term-chip-status {
+    color: #64748b;
+    font-style: italic;
+}
+.term-chip-dates {
+    font-size: 0.64rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-top: 0.1rem;
+}
+.term-chip-now {
+    box-shadow: 0 0 0 2px #10b981;
+}
+.term-chip-live {
+    border-left: 3px solid #3b82f6;
+}
+.term-chip-tx {
+    border-left: 3px solid #8b5cf6;
+}
+.term-chip-both {
+    border-left: 3px solid #3b82f6;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.06) 0%, rgba(139, 92, 246, 0.07) 100%);
+}
+.term-chip-projected {
+    border-style: dashed;
+    border-left-style: solid;
+    border-left-color: #94a3b8;
+    opacity: 0.95;
+}
+.term-chip-saved .term-chip-sem-year::after {
+    content: " \2022";
+    color: #f59e0b;
+    font-weight: 700;
+}
+.term-timeline-legend {
+    font-size: 0.68rem;
+    line-height: 1.4;
+    row-gap: 0.25rem !important;
+}
+@media (max-width: 767.98px) {
+    .term-timeline-legend {
+        font-size: 0.64rem;
+    }
+}
+@media (min-width: 768px) {
+    .term-chip {
+        min-height: 2.5rem;
+    }
+}
+.term-legend-swatch {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: 0.15rem;
+    vertical-align: middle;
+}
+.term-legend-now {
+    background: #10b981;
+}
+.term-legend-sec {
+    background: #3b82f6;
+}
+.term-legend-tx {
+    background: #8b5cf6;
+}
+.term-legend-proj {
+    border: 1px dashed #94a3b8;
+    background: #fff;
+}
+.term-jump-link {
+    font-size: 0.78rem;
+    text-decoration: none;
+    color: var(--accent) !important;
+    font-weight: 600;
+}
+.term-jump-link:hover {
+    text-decoration: underline;
+}
+
+/* === Past semester transcript vs planning calendar === */
+.past-term-picker-hint .btn-accent {
+    font-weight: 600;
+}
+
+.past-term-record-shell .section-table thead th {
+    white-space: nowrap;
+    border-bottom-width: 1px;
+}
+
+.past-term-record-badge {
+    background: rgba(100, 116, 139, 0.12);
+    color: var(--navy-mid);
+    font-weight: 600;
+}
+
+.past-credits-pick:focus {
+    box-shadow: inset 0 0 0 2px rgba(232, 86, 42, 0.35);
+}
+
+.past-credits-pick:hover {
+    background: rgba(232, 86, 42, 0.06) !important;
+}
+
+.past-term-empty {
+    border: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
 /* === Scrollbar (for picker) === */
 .section-results::-webkit-scrollbar,
-.picker-panel::-webkit-scrollbar {
+.picker-panel::-webkit-scrollbar,
+.term-timeline-scroll::-webkit-scrollbar {
     width: 5px;
+    height: 5px;
 }
 
 .section-results::-webkit-scrollbar-thumb,
-.picker-panel::-webkit-scrollbar-thumb {
+.picker-panel::-webkit-scrollbar-thumb,
+.term-timeline-scroll::-webkit-scrollbar-thumb {
     background: #ccc;
     border-radius: 3px;
 }
