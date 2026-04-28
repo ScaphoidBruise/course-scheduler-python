@@ -19,6 +19,7 @@
                     <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
                     <li class="nav-item"><a class="nav-link active" href="/catalog">Catalog</a></li>
                     <li class="nav-item"><a class="nav-link" href="/profile">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/planner">Planner</a></li>
                     <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
                 </ul>
@@ -41,6 +42,25 @@
                     </select>
                 </div>
                 <div class="col-auto">
+                    <label class="filter-label">Level</label>
+                    <select id="levelSelect" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="1">1xxx</option>
+                        <option value="2">2xxx</option>
+                        <option value="3">3xxx</option>
+                        <option value="4">4xxx</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="filter-label">Typical term</label>
+                    <select id="termSelect" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="Spring">Spring</option>
+                        <option value="Summer">Summer</option>
+                        <option value="Fall">Fall</option>
+                    </select>
+                </div>
+                <div class="col-auto">
                     <label class="filter-label">Search</label>
                     <input type="text" id="searchInput" class="form-control form-control-sm"
                            placeholder="Code or name...">
@@ -54,11 +74,12 @@
                 <table class="table table-sm table-hover section-table align-middle">
                     <thead>
                         <tr>
+                            <th class="text-center">Wish</th>
                             <th>Code</th>
                             <th>Course Name</th>
                             <th>Prerequisites</th>
                             <th>Term (inferred)</th>
-                            <th>Link</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="courseBody"></tbody>
@@ -68,62 +89,55 @@
         </div>
     </div>
 
+    <div class="modal fade" id="courseDetailModal" tabindex="-1" aria-labelledby="courseDetailTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="courseDetailTitle">Course detail</h5>
+                        <p class="text-muted small mb-0" id="courseDetailCode"></p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="courseDetailAlert" class="alert alert-danger py-2 d-none"></div>
+                    <div class="catalog-detail-summary mb-3">
+                        <div class="mb-2">
+                            <span class="fw-semibold">Prerequisites:</span>
+                            <span id="courseDetailPrereqs">—</span>
+                        </div>
+                        <div>
+                            <span class="fw-semibold">Catalog link:</span>
+                            <span id="courseDetailUrl">—</span>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                        <h6 class="mb-0">Sections across all terms</h6>
+                        <button type="button" id="detailWishlistBtn" class="btn btn-outline-accent btn-sm">Add to wishlist</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover section-table catalog-detail-table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Term</th>
+                                    <th>Section</th>
+                                    <th>Days</th>
+                                    <th>Time</th>
+                                    <th>Mode</th>
+                                    <th>Location</th>
+                                    <th>Dates</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="courseDetailSections"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        var subjectSelect = document.getElementById("subjectSelect");
-        var searchInput = document.getElementById("searchInput");
-        var filterBtn = document.getElementById("filterBtn");
-        var courseBody = document.getElementById("courseBody");
-        var courseCount = document.getElementById("courseCount");
-
-        fetch("/api/course-subjects")
-            .then(function (r) { return r.json(); })
-            .then(function (subjects) {
-                for (var i = 0; i < subjects.length; i++) {
-                    var opt = document.createElement("option");
-                    opt.value = subjects[i];
-                    opt.textContent = subjects[i];
-                    subjectSelect.appendChild(opt);
-                }
-                loadCourses();
-            });
-
-        filterBtn.addEventListener("click", loadCourses);
-        searchInput.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") loadCourses();
-        });
-
-        function loadCourses() {
-            var params = "";
-            if (subjectSelect.value) params += "subject=" + encodeURIComponent(subjectSelect.value);
-            if (searchInput.value.trim()) {
-                if (params) params += "&";
-                params += "search=" + encodeURIComponent(searchInput.value.trim());
-            }
-
-            fetch("/api/courses?" + params)
-                .then(function (r) { return r.json(); })
-                .then(function (courses) {
-                    var html = "";
-                    for (var i = 0; i < courses.length; i++) {
-                        var c = courses[i];
-                        html += "<tr>";
-                        html += '<td class="fw-semibold text-nowrap">' + c.course_code + "</td>";
-                        html += "<td>" + (c.course_name || "") + "</td>";
-                        html += '<td class="small">' + (c.prerequisites || "—") + "</td>";
-                        html += "<td>" + (c.term_infered || "—") + "</td>";
-                        html += "<td>";
-                        if (c.course_url) {
-                            html += '<a href="' + c.course_url + '" target="_blank" class="btn btn-outline-accent btn-xs">View</a>';
-                        } else {
-                            html += "—";
-                        }
-                        html += "</td></tr>";
-                    }
-                    courseBody.innerHTML = html;
-                    courseCount.textContent = courses.length + " course" + (courses.length !== 1 ? "s" : "") + ".";
-                });
-        }
-    </script>
+    <script src="/static/catalog.js"></script>
 </body>
 </html>
