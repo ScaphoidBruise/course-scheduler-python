@@ -86,9 +86,15 @@ Use **Export .ics** to download calendar events for in-person meeting times. Use
 
 ## Running tests
 
+From the repo root:
+
 ```bash
-python tests/test_scenarios.py
+python -m pytest tests/ -v
+# or, if pytest is unavailable in your environment:
+python -m unittest discover -s tests -v
 ```
+
+The suite covers prereq parsing, the planner overview API, scenario lifecycle, the new degree-progress overview endpoint, and the new account self-service flow.
 
 ## Degree progress & prereq awareness
 
@@ -101,6 +107,30 @@ The Schedule page checks visible section cards against completed transcript cour
 The catalog page supports subject, level, typical-term, and text filters. Course rows open a detail modal with prerequisites, catalog link, and all known sections across terms with session dates from `session_calendar`.
 
 Signed-in users can add catalog courses to a personal wishlist. Wishlist rows are stored in `course_wishlist` and also appear on the profile page below Past & current credits.
+
+## /progress (dedicated degree-progress page)
+
+Detailed degree progress lives on its own `/progress` page. The Profile page now keeps a compact overview tile (credits earned vs target, courses still required, progress bar) with a "View full progress →" link.
+
+The full page renders three cards:
+
+- **Completed** — table view with per-row "Remove" buttons for entries you added via the manual completed-overrides flow (transcript-derived rows show "From transcript" and are not removable).
+- **In progress** — read-only list of in-progress courses detected from the transcript.
+- **Remaining** — Bootstrap accordion grouped by Spring / Summer / Fall / Unscheduled. Each course pill opens a popover with a grade picker (A through D and P/CR/S) and a "Mark as completed" save button that posts to `/api/completed-overrides`.
+
+The header strip lets you edit the credits target inline (POST `/api/planner-target`). A new `GET /api/degree-progress/overview` endpoint returns just the summary stats (credits completed, target, percent complete, courses remaining count, scope subjects, transcript flag, major / minor) for the profile tile so the lighter page does not pay for full progress detail.
+
+## Account self-service
+
+The Account page now offers self-service for signed-in users:
+
+- **Account overview** — username, member-since date, transcript flag, and saved schedule plan count.
+- **Change password** — re-confirms the current password before accepting a new password (≥ 8 chars, must match confirmation).
+- **Change username** — lowercase, ≥ 3 characters, gated by current password, and rejected with `409 Conflict` when the name is taken.
+- **Export my data** — downloads a JSON bundle (`utpb-export-<username>-<YYYYMMDD>.json`) containing the user record, profile, scenarios with section ids, wishlist, completed-course overrides, and saved settings.
+- **Delete account** — destructive flow gated by typing the literal word `DELETE` plus the current password. On success the session is cleared and `/api/me` reports `authenticated=False`.
+
+The endpoints are `GET /api/account/summary`, `POST /api/account/change-password`, `POST /api/account/change-username`, `POST /api/account/delete`, and `GET /api/account/export`. They live alongside the existing `/api/login`, `/api/register`, and `/api/logout` endpoints and reuse `werkzeug.security.check_password_hash` to re-verify the current password before any mutation.
 
 ## How it's built
 
