@@ -23,6 +23,9 @@ from db import (
     get_completed_course_codes, check_prerequisites, get_degree_progress,
     list_completed_overrides, add_completed_override, delete_completed_override,
     calculate_gpa_whatif, normalize_course_code,
+    change_password, change_username, delete_user_cascade,
+    account_summary, export_user_bundle,
+    get_connection,
 )
 from conflict import sections_conflict
 from transcript_pdf import parse_utpb_transcript_pdf, transcript_dict_to_json
@@ -319,6 +322,11 @@ def profile_page():
 @app.route("/planner")
 def planner_page():
     return send_from_directory("pages", "planner.html")
+
+
+@app.route("/progress")
+def progress_page():
+    return send_from_directory("pages", "progress.html")
 
 
 @app.route("/share/<token>")
@@ -722,6 +730,71 @@ def api_degree_progress():
     return jsonify(get_degree_progress(user["id"]))
 
 
+@app.route("/api/degree-progress/overview")
+def api_degree_progress_overview():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    progress = get_degree_progress(user["id"])
+    profile = get_user_profile(user["id"])
+
+    completed_rows = progress.get("completed") or []
+    credits_completed = 0.0
+    for row in completed_rows:
+        credits_completed += _credit_value(row.get("attempted") or row.get("earned"))
+    if credits_completed <= 0:
+        credits_completed = _credit_value(profile.get("credits_earned"))
+
+    credits_target = _planner_target_for_user(user["id"])
+    if credits_target <= 0:
+        credits_target = float(DEFAULT_PLANNER_TARGET)
+
+    remaining_buckets = progress.get("remaining_by_typical_term") or {}
+    courses_remaining_count = 0
+    for season in ("Spring", "Summer", "Fall", "Unscheduled"):
+        bucket = remaining_buckets.get(season) or []
+        courses_remaining_count += len(bucket)
+
+    percent = 0.0
+    if credits_target > 0:
+        percent = (float(credits_completed) / float(credits_target)) * 100.0
+    if percent < 0:
+        percent = 0.0
+    if percent > 100:
+        percent = 100.0
+
+    scope_subjects: list[str] = []
+    seen: set[str] = set()
+    for row in completed_rows:
+        subj = (row.get("subject") or "").upper()
+        if subj and subj not in seen:
+            seen.add(subj)
+            scope_subjects.append(subj)
+    if not scope_subjects:
+        for season in ("Spring", "Summer", "Fall", "Unscheduled"):
+            for row in remaining_buckets.get(season) or []:
+                subj = (row.get("subject_code") or "").upper()
+                if subj and subj not in seen:
+                    seen.add(subj)
+                    scope_subjects.append(subj)
+
+    has_transcript = bool(profile.get("transcript_parsed_json"))
+
+    return jsonify(
+        {
+            "credits_completed": _format_credit_number(credits_completed),
+            "credits_target": int(round(float(credits_target))),
+            "percent_complete": round(percent, 1),
+            "courses_remaining_count": courses_remaining_count,
+            "scope_subjects": scope_subjects,
+            "has_transcript": has_transcript,
+            "major": profile.get("major"),
+            "minor": profile.get("minor"),
+        }
+    )
+
+
 @app.route("/api/prereq-check")
 def api_prereq_check():
     user, auth_error = require_auth()
@@ -832,6 +905,113 @@ def api_login():
 def api_logout():
     session.clear()
     return jsonify({"ok": True})
+
+
+@app.route("/api/account/summary")
+def api_account_summary():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    summary = account_summary(user["id"])
+    if not summary:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify(summary)
+
+
+def _user_with_password_hash(user_id):
+    """Fetch the password_hash for a user (not returned by /api/me)."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, username, password_hash FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+@app.route("/api/account/change-password", methods=["POST"])
+def api_account_change_password():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    payload = request.get_json(silent=True) or {}
+    current_password = payload.get("current_password") or ""
+    new_password = payload.get("new_password") or ""
+    confirm_password = payload.get("confirm_password") or ""
+
+    user_with_hash = _user_with_password_hash(user["id"])
+    if not user_with_hash or not check_password_hash(user_with_hash["password_hash"], current_password):
+        return jsonify({"error": "Current password is incorrect."}), 401
+    if len(new_password) < 8:
+        return jsonify({"error": "New password must be at least 8 characters."}), 400
+    if new_password != confirm_password:
+        return jsonify({"error": "New passwords do not match."}), 400
+
+    change_password(user["id"], generate_password_hash(new_password))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/account/change-username", methods=["POST"])
+def api_account_change_username():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    payload = request.get_json(silent=True) or {}
+    current_password = payload.get("current_password") or ""
+    new_username = (payload.get("new_username") or "").strip().lower()
+
+    user_with_hash = _user_with_password_hash(user["id"])
+    if not user_with_hash or not check_password_hash(user_with_hash["password_hash"], current_password):
+        return jsonify({"error": "Current password is incorrect."}), 401
+    if len(new_username) < 3:
+        return jsonify({"error": "Username must be at least 3 characters."}), 400
+    if new_username == user["username"]:
+        return jsonify({"ok": True, "user": user})
+
+    if not change_username(user["id"], new_username):
+        return jsonify({"error": "That username is already taken."}), 409
+
+    refreshed = get_user_by_id(user["id"])
+    return jsonify({"ok": True, "user": refreshed})
+
+
+@app.route("/api/account/delete", methods=["POST"])
+def api_account_delete():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    payload = request.get_json(silent=True) or {}
+    current_password = payload.get("current_password") or ""
+    confirm = payload.get("confirm") or ""
+
+    if confirm != "DELETE":
+        return jsonify({"error": 'Type "DELETE" to confirm.'}), 400
+
+    user_with_hash = _user_with_password_hash(user["id"])
+    if not user_with_hash or not check_password_hash(user_with_hash["password_hash"], current_password):
+        return jsonify({"error": "Current password is incorrect."}), 401
+
+    delete_user_cascade(user["id"])
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/account/export")
+def api_account_export():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    bundle = export_user_bundle(user["id"])
+    if not bundle:
+        return jsonify({"error": "User not found"}), 404
+    today = date.today().strftime("%Y%m%d")
+    filename = f'utpb-export-{user["username"]}-{today}.json'
+    body = json.dumps(bundle, default=str, indent=2)
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.route("/api/scenarios")

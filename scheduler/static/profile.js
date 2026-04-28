@@ -771,7 +771,7 @@ function renderProfile(data) {
     applyProgramFieldsUI();
 
     revealProfileChrome(data);
-    loadDegreeProgress();
+    loadDegreeOverview();
     loadGpaWhatIf();
 }
 
@@ -790,104 +790,46 @@ function loadProfile() {
         .then(renderProfile);
 }
 
-function renderDegreeCoursePills(rows, emptyText) {
-    if (!rows || !rows.length) {
-        return '<p class="text-muted mb-0">' + escapeHtml(emptyText) + "</p>";
-    }
-    var html = '<div class="d-flex flex-wrap gap-2">';
-    for (var i = 0; i < rows.length; i++) {
-        var r = rows[i] || {};
-        var code = r.course_code || r.course || "Course";
-        var title = r.course_name ? ' title="' + escapeHtml(r.course_name) + '"' : "";
-        var grade = r.grade ? " · " + r.grade : "";
-        html += '<span class="degree-course-pill"' + title + ">" + escapeHtml(code + grade) + "</span>";
-    }
-    html += "</div>";
-    return html;
-}
+function loadDegreeOverview() {
+    var earnedEl = document.getElementById("overviewCreditsEarned");
+    var targetEl = document.getElementById("overviewCreditsTarget");
+    var remainingEl = document.getElementById("overviewRemainingCount");
+    var bar = document.getElementById("overviewProgressBar");
+    var scopeLine = document.getElementById("overviewScopeLine");
+    var emptyState = document.getElementById("overviewEmptyState");
+    if (!earnedEl || !targetEl || !remainingEl || !bar) return;
 
-function renderRemainingCourses(grouped) {
-    grouped = grouped || {};
-    var seasons = ["Spring", "Summer", "Fall", "Unscheduled"];
-    var html = "";
-    var total = 0;
-    for (var i = 0; i < seasons.length; i++) {
-        var season = seasons[i];
-        var rows = grouped[season] || [];
-        if (!rows.length) continue;
-        total += rows.length;
-        html += '<div class="degree-season-group mb-2">';
-        html += '<div class="degree-season-heading">' + escapeHtml(season) + "</div>";
-        html += '<div class="d-flex flex-wrap gap-2">';
-        for (var j = 0; j < rows.length; j++) {
-            var r = rows[j];
-            html +=
-                '<button type="button" class="degree-course-pill degree-course-pill-btn" data-course-code="' +
-                escapeHtml(r.course_code || "") +
-                '" title="Mark ' +
-                escapeHtml(r.course_name || r.course_code || "course") +
-                ' as done">' +
-                escapeHtml(r.course_code || "Course") +
-                "</button>";
-        }
-        html += "</div></div>";
-    }
-    if (!total) {
-        return '<p class="text-muted mb-0">No remaining catalog courses found for the detected program subjects.</p>';
-    }
-    return html;
-}
-
-function loadDegreeProgress() {
-    var completedEl = document.getElementById("degreeCompletedList");
-    var inProgressEl = document.getElementById("degreeInProgressList");
-    var remainingEl = document.getElementById("degreeRemainingList");
-    if (!completedEl || !inProgressEl || !remainingEl) return;
-    fetch("/api/degree-progress")
+    fetch("/api/degree-progress/overview")
         .then(function (r) {
-            if (!r.ok) throw new Error("degree-progress");
+            if (!r.ok) throw new Error("overview");
             return r.json();
         })
         .then(function (data) {
-            completedEl.innerHTML = renderDegreeCoursePills(data.completed, "No completed courses detected yet.");
-            inProgressEl.innerHTML = renderDegreeCoursePills(data.in_progress, "No in-progress courses detected.");
-            remainingEl.innerHTML = renderRemainingCourses(data.remaining_by_typical_term);
+            var earned = data.credits_completed != null ? Number(data.credits_completed) : 0;
+            var target = data.credits_target != null ? Number(data.credits_target) : 120;
+            var remaining = data.courses_remaining_count != null ? data.courses_remaining_count : 0;
+            var pct = data.percent_complete != null ? Number(data.percent_complete) : 0;
+            earnedEl.textContent = earned % 1 === 0 ? String(earned) : earned.toFixed(1);
+            targetEl.textContent = String(target);
+            remainingEl.textContent = String(remaining);
+            bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
+            bar.setAttribute("aria-valuenow", String(pct));
+            if (scopeLine) {
+                var pieces = [];
+                if (data.major) pieces.push("Based on: " + data.major);
+                if (data.scope_subjects && data.scope_subjects.length) {
+                    pieces.push("scope: " + data.scope_subjects.join(", "));
+                }
+                scopeLine.textContent = pieces.join(" · ");
+            }
+            if (emptyState) {
+                emptyState.classList.toggle("d-none", Boolean(data.has_transcript));
+            }
         })
         .catch(function () {
-            completedEl.innerHTML = '<p class="text-muted mb-0">Could not load degree progress.</p>';
-            inProgressEl.innerHTML = "";
-            remainingEl.innerHTML = "";
+            if (scopeLine) scopeLine.textContent = "Could not load progress overview.";
         });
 }
-
-document.addEventListener("click", function (e) {
-    var btn = e.target && e.target.closest ? e.target.closest(".degree-course-pill-btn") : null;
-    if (!btn) return;
-    var code = btn.getAttribute("data-course-code") || "";
-    if (!code) return;
-    var gradeEl = document.getElementById("degreeOverrideGrade");
-    btn.disabled = true;
-    fetch("/api/completed-overrides", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            course_code: code,
-            grade: gradeEl && gradeEl.value ? gradeEl.value : "",
-        }),
-    })
-        .then(function (r) {
-            if (!r.ok) throw new Error("override");
-            return r.json();
-        })
-        .then(function () {
-            showAlert("Marked " + escapeHtml(code) + " as completed.", "success");
-            loadDegreeProgress();
-        })
-        .catch(function () {
-            btn.disabled = false;
-            showAlert("Could not mark " + escapeHtml(code) + " as completed.", "danger");
-        });
-});
 
 var gpaWhatIfCourses = [];
 
