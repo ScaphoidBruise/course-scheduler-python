@@ -6,8 +6,6 @@ var COLORS = [
 var DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 var DAY_CHARS  = ["M", "T", "W", "R", "F"];
 var PX_PER_HOUR = 64;
-var SHARE_DATA = window.SCHEDULE_SHARE_DATA || null;
-var READ_ONLY_SCHEDULE = !!SHARE_DATA;
 
 function storageKey(term) {
     return "schedule_" + term.replace(/\s+/g, "_");
@@ -16,6 +14,8 @@ function storageKey(term) {
 var scheduleByTerm = {};
 var scenariosByTerm = {};
 var currentScenario = null;
+var prereqPromptRequest = 0;
+var sectionMatchRequest = 0;
 
 function scheduleKey(term) {
     return term + "::" + (currentScenario && currentScenario.id ? currentScenario.id : "active");
@@ -64,6 +64,26 @@ function saveScheduleIds(term, ids) {
         }
         if (!r.ok) throw new Error("Failed to save schedule");
     });
+}
+
+function normalizeCourseCodeForLookup(raw) {
+    var text = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    var match = text.match(/^([A-Z]{2,5})([0-9]{4})$/);
+    return match ? match[1] + " " + match[2] : String(raw || "").trim().toUpperCase();
+}
+
+function compactCourseCode(raw) {
+    return normalizeCourseCodeForLookup(raw).replace(/\s+/g, "");
+}
+
+function sectionOptionLabel(sec) {
+    var parts = [];
+    if (sec.section_code) parts.push("Section " + sec.section_code);
+    if (sec.days && sec.start_time) parts.push(sec.days + " " + sec.start_time + "-" + (sec.end_time || ""));
+    if (sec.location) parts.push(sec.location);
+    if (sec.mode) parts.push(sec.mode);
+    if (sec.session) parts.push(sessionLabel(sec.session));
+    return parts.length ? parts.join(" | ") : "Section " + sec.id;
 }
 
 function currentTerm() {
@@ -623,7 +643,7 @@ function renderTermPicker(terms) {
     for (var yi = 0; yi < years.length; yi++) {
         var yk = years[yi];
         html += "<div class=\"term-year-block\">";
-        html += "<div class=\"term-year-pill\">" + yk + "</div>";
+        html += "<div class=\"term-year-pill\">" + escapeHtmlSch(yk) + "</div>";
         html += "<div class=\"term-year-chips\">";
         var ch = byYear[yk];
         for (var j = 0; j < ch.length; j++) {
@@ -655,13 +675,13 @@ function renderTermPicker(terms) {
                 title = t.label;
             }
             html += "<button type=\"button\" class=\"" + cls + "\" data-term=\"" +
-                t.label.replace(/&/g, "&amp;").replace(/"/g, "&quot;") +
-                "\" title=\"" + title.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + "\"";
+                escapeHtmlSch(t.label || "") +
+                "\" title=\"" + escapeHtmlSch(title) + "\"";
             html += " aria-selected=\"false\">";
             html += "<span class=\"term-chip-line d-flex flex-column align-items-start\">";
-            html += "<span class=\"term-chip-semrow\"><span class=\"term-chip-sem-year\">" + (semY || t.label || "") + "</span>";
+            html += "<span class=\"term-chip-semrow\"><span class=\"term-chip-sem-year\">" + escapeHtmlSch(semY || t.label || "") + "</span>";
             html += " <span class=\"term-chip-pipe text-muted\">|</span> ";
-            html += "<span class=\"term-chip-status\">" + st + "</span></span>";
+            html += "<span class=\"term-chip-status\">" + escapeHtmlSch(st) + "</span></span>";
             if (t.date_start && t.date_end) {
                 html += "<span class=\"term-chip-dates d-none d-xl-inline\">" + formatDate(t.date_start) + " – " + formatDate(t.date_end) + "</span>";
             }
@@ -722,7 +742,6 @@ var duplicateScenarioBtn = document.getElementById("duplicateScenarioBtn");
 var renameScenarioBtn = document.getElementById("renameScenarioBtn");
 var deleteScenarioBtn = document.getElementById("deleteScenarioBtn");
 var exportIcsBtn = document.getElementById("exportIcsBtn");
-var copyShareLinkBtn = document.getElementById("copyShareLinkBtn");
 
 function updateTermScenarioLabel() {
     if (!termLabelEl) return;
@@ -898,7 +917,7 @@ function loadTermTimelineOrFallback() {
                 .catch(function (e2) {
                     if (sectionResults) {
                         sectionResults.innerHTML = "<p class=\"text-danger small\">" +
-                            (e2 && e2.message ? e2.message : "Could not load terms.") + "</p>";
+                            escapeHtmlSch(e2 && e2.message ? e2.message : "Could not load terms.") + "</p>";
                     }
                     showAlert("Failed to load term list.", "danger");
                 });
@@ -915,28 +934,24 @@ logoutBtn && logoutBtn.addEventListener("click", function () {
         });
 });
 
-if (READ_ONLY_SCHEDULE) {
-    renderSharedSchedule();
-} else {
-    fetch("/api/me")
-        .then(function (r) {
-            if (!r.ok) {
-                throw new Error("session check failed");
-            }
-            return r.json();
-        })
-        .then(function (me) {
-            if (!me.authenticated) {
-                window.location.href = "/account";
-                return;
-            }
-            return loadTermTimelineOrFallback();
-        })
-        .catch(function (err) {
-            console.error("schedule init:", err);
-            showAlert("Could not load the schedule page. Refresh or sign in again.", "danger");
-        });
-}
+fetch("/api/me")
+    .then(function (r) {
+        if (!r.ok) {
+            throw new Error("session check failed");
+        }
+        return r.json();
+    })
+    .then(function (me) {
+        if (!me.authenticated) {
+            window.location.href = "/account";
+            return;
+        }
+        return loadTermTimelineOrFallback();
+    })
+    .catch(function (err) {
+        console.error("schedule init:", err);
+        showAlert("Could not load the schedule page. Refresh or sign in again.", "danger");
+    });
 
 if (termPickerScroll) {
     termPickerScroll.addEventListener("click", function (e) {
@@ -1110,27 +1125,6 @@ exportIcsBtn && exportIcsBtn.addEventListener("click", function () {
     window.location.href = "/api/scenarios/" + encodeURIComponent(currentScenario.id) + "/ics";
 });
 
-copyShareLinkBtn && copyShareLinkBtn.addEventListener("click", function () {
-    if (!currentScenario) return;
-    fetch("/api/scenarios/" + encodeURIComponent(currentScenario.id) + "/share", { method: "POST" })
-        .then(function (r) {
-            if (!r.ok) throw new Error("Could not create share link");
-            return r.json();
-        })
-        .then(function (data) {
-            var absolute = new URL(data.url, window.location.origin).href;
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                return navigator.clipboard.writeText(absolute).then(function () {
-                    showAlert("Share link copied.", "success");
-                });
-            }
-            window.prompt("Copy this share link:", absolute);
-        })
-        .catch(function () {
-            showAlert("Could not create share link.", "danger");
-        });
-});
-
 function onTermChange() {
     var term = currentTerm();
     currentScenario = null;
@@ -1171,7 +1165,7 @@ function loadTermDates(term) {
             var html = "";
             for (var i = 0; i < dates.length; i++) {
                 var d = dates[i];
-                var label = sessionLabel(d.session);
+                var label = escapeHtmlSch(sessionLabel(d.session));
                 if (html) html += " &nbsp;|&nbsp; ";
                 html += "<strong>" + label + ":</strong> " + formatDate(d.session_start_date) + " – " + formatDate(d.session_end_date);
             }
@@ -1248,20 +1242,22 @@ function renderSectionList(sections) {
         html += '<p class="text-muted small mb-1">' + sections.length + ' result' + (sections.length !== 1 ? 's' : '') + '</p>';
         for (var i = 0; i < sections.length; i++) {
             var sec = sections[i];
+            var code = escapeHtmlSch(sec.course_code || "");
+            var title = escapeHtmlSch(sec.course_name || "");
             var added = sec.id != null && ids.indexOf(sec.id) !== -1;
             var half = sec.session && isHalfSemester(sec.session);
             var inferred = !!sec.is_inferred_placeholder;
             html += '<div class="section-card ' + (added ? 'section-card-added' : '') + '">';
             html += '<div class="d-flex justify-content-between align-items-start">';
-            html += '<div><span class="fw-bold">' + sec.course_code + '</span> ';
+            html += '<div><span class="fw-bold">' + code + '</span> ';
             if (!inferred) {
-                html += '<span class="text-muted small">&sect;' + (sec.section_code || '') + '</span>';
+                html += '<span class="text-muted small">&sect;' + escapeHtmlSch(sec.section_code || '') + '</span>';
             }
             if (inferred && sec.term_infered) {
                 html += ' <span class="badge bg-secondary-subtle text-secondary border">Maps: ' + escapeHtmlSch(sec.term_infered) + '</span>';
             }
             if (!inferred && half) {
-                html += ' <span class="session-badge session-badge-half">' + sessionLabel(sec.session) + '</span>';
+                html += ' <span class="session-badge session-badge-half">' + escapeHtmlSch(sessionLabel(sec.session)) + '</span>';
             }
             html += '</div>';
             if (added) {
@@ -1273,16 +1269,17 @@ function renderSectionList(sections) {
                 html += ' <span class="badge bg-light text-muted border ms-1">Planning</span>';
             }
             html += '</div>';
-            html += '<div class="small text-muted">' + (sec.course_name || '') + '</div>';
+            html += '<div class="small text-muted">' + title + '</div>';
             html += '<div class="small text-muted">';
             if (sec.days) {
-                html += sec.days + ' &middot; ' + sec.start_time + '–' + sec.end_time + ' &middot; ' + (sec.location || '');
+                html += escapeHtmlSch(sec.days || '') + ' &middot; ' + escapeHtmlSch(sec.start_time || '') +
+                    '–' + escapeHtmlSch(sec.end_time || '') + ' &middot; ' + escapeHtmlSch(sec.location || '');
             } else if (inferred) {
                 html += 'No section / meeting data until this term is published in Banner.';
             } else {
                 html += 'Online / Async';
             }
-            html += ' &middot; ' + (sec.credits || '') + (sec.credits ? ' hrs' : '') + '</div>';
+            html += ' &middot; ' + escapeHtmlSch(sec.credits || '') + (sec.credits ? ' hrs' : '') + '</div>';
             if (sec.session_start_date) {
                 html += '<div class="small text-muted">' + formatDate(sec.session_start_date) + ' – ' + formatDate(sec.session_end_date) + '</div>';
             }
@@ -1343,7 +1340,10 @@ function refreshSchedule() {
     if (ids.length === 0) {
         renderGrid([]);
         renderAddedTable([]);
+        renderTranscriptSectionMatcher([]);
         updateSummary([], {});
+        prereqPromptRequest++;
+        renderScheduledPrereqPrompt([]);
         return;
     }
     fetch("/api/sections/batch?ids=" + ids.join(",") + "&term=" + encodeURIComponent(term))
@@ -1351,19 +1351,10 @@ function refreshSchedule() {
         .then(function (sections) {
             renderGrid(sections);
             renderAddedTable(sections);
+            renderTranscriptSectionMatcher(sections);
             updateSummary(sections, findConflictIds(sections));
+            refreshScheduledPrereqPrompt(sections);
         });
-}
-
-function renderSharedSchedule() {
-    var scenario = SHARE_DATA && SHARE_DATA.scenario ? SHARE_DATA.scenario : null;
-    var sections = SHARE_DATA && SHARE_DATA.sections ? SHARE_DATA.sections : [];
-    if (termLabelEl && scenario) {
-        termLabelEl.textContent = scenario.term_label + " · " + scenario.name;
-    }
-    renderGrid(sections);
-    renderAddedTable(sections);
-    updateSummary(sections, findConflictIds(sections));
 }
 
 function updateSummary(sections, conflictIds) {
@@ -1387,6 +1378,182 @@ function updateSummary(sections, conflictIds) {
     if (clearBtn) {
         clearBtn.classList.toggle("d-none", sections.length === 0);
     }
+}
+
+function renderScheduledPrereqPrompt(items) {
+    var prompt = document.getElementById("scheduledPrereqPrompt");
+    if (!prompt) return;
+    if (!items || !items.length) {
+        prompt.classList.add("d-none");
+        prompt.innerHTML = "";
+        return;
+    }
+
+    var html = '<div><strong>Prerequisite missing.</strong> This course was still added to your schedule, but ';
+    html += 'you may need to add the missing prerequisite on the <a href="/progress">Progress page</a> if it is not already listed.</div>';
+    html += '<div class="schedule-prereq-list">';
+    for (var i = 0; i < items.length; i++) {
+        html += '<div><span class="fw-semibold">' + escapeHtmlSch(items[i].code) + '</span>: ' +
+            escapeHtmlSch(items[i].missing.join(", ")) + '</div>';
+    }
+    html += '</div>';
+    prompt.innerHTML = html;
+    prompt.classList.remove("d-none");
+}
+
+function refreshScheduledPrereqPrompt(sections) {
+    var seen = {};
+    var codes = [];
+    for (var i = 0; i < sections.length; i++) {
+        var code = normalizeCourseCodeForLookup(sections[i].course_code);
+        if (!code || seen[code]) continue;
+        seen[code] = true;
+        codes.push(code);
+    }
+    if (!codes.length) {
+        prereqPromptRequest++;
+        renderScheduledPrereqPrompt([]);
+        return;
+    }
+
+    var requestId = ++prereqPromptRequest;
+    var url = "/api/prereq-check?codes=" + encodeURIComponent(codes.map(compactCourseCode).join(","));
+    var term = currentTerm();
+    if (term) {
+        url += "&term=" + encodeURIComponent(term);
+    }
+    fetch(url)
+        .then(function (r) {
+            if (!r.ok) throw new Error("prereq-check");
+            return r.json();
+        })
+        .then(function (data) {
+            if (requestId !== prereqPromptRequest) return;
+            var items = [];
+            for (var i = 0; i < codes.length; i++) {
+                var key = normalizeCourseCodeForLookup(codes[i]);
+                var result = data[key] || data[compactCourseCode(key)];
+                if (!result || !result.missing || !result.missing.length) continue;
+                items.push({ code: key, missing: result.missing });
+            }
+            renderScheduledPrereqPrompt(items);
+        })
+        .catch(function () {
+            if (requestId === prereqPromptRequest) {
+                renderScheduledPrereqPrompt([]);
+            }
+        });
+}
+
+function renderTranscriptSectionMatcher(sections) {
+    var wrap = document.getElementById("transcriptSectionMatchWrap");
+    var body = document.getElementById("transcriptSectionMatchBody");
+    if (!wrap || !body) return;
+
+    var placeholders = [];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].is_inferred_placeholder) {
+            placeholders.push(sections[i]);
+        }
+    }
+    if (!placeholders.length) {
+        sectionMatchRequest++;
+        wrap.classList.add("d-none");
+        body.innerHTML = "";
+        return;
+    }
+
+    var requestId = ++sectionMatchRequest;
+    var html = "";
+    for (var j = 0; j < placeholders.length; j++) {
+        var sec = placeholders[j];
+        var key = Math.abs(sec.id);
+        html += '<div class="transcript-section-card">';
+        html += '<div class="d-flex flex-wrap justify-content-between align-items-start gap-2">';
+        html += '<div><div class="fw-semibold">' + escapeHtmlSch(sec.course_code || "") + '</div>';
+        html += '<div class="small text-muted">' + escapeHtmlSch(sec.course_name || "") + '</div></div>';
+        html += '<div class="d-flex flex-wrap gap-2 align-items-center">';
+        html += '<select class="form-select form-select-sm" id="sectionMatchSelect' + key + '" disabled>';
+        html += '<option>Loading matching sections...</option></select>';
+        html += '<button type="button" class="btn btn-accent btn-sm" id="sectionMatchBtn' + key + '" ';
+        html += 'onclick="replacePlaceholderSection(' + sec.id + ')" disabled>Use section</button>';
+        html += '</div></div></div>';
+    }
+    body.innerHTML = html;
+    wrap.classList.remove("d-none");
+
+    for (var k = 0; k < placeholders.length; k++) {
+        loadTranscriptSectionCandidates(placeholders[k], requestId);
+    }
+}
+
+function loadTranscriptSectionCandidates(placeholder, requestId) {
+    var term = currentTerm();
+    var code = normalizeCourseCodeForLookup(placeholder.course_code);
+    var key = Math.abs(placeholder.id);
+    var select = document.getElementById("sectionMatchSelect" + key);
+    var btn = document.getElementById("sectionMatchBtn" + key);
+    if (!select || !btn || !term || !code) return;
+
+    fetch("/api/sections?term=" + encodeURIComponent(term) + "&search=" + encodeURIComponent(code))
+        .then(function (r) { return r.json(); })
+        .then(function (sections) {
+            if (requestId !== sectionMatchRequest) return;
+            var candidates = [];
+            for (var i = 0; i < sections.length; i++) {
+                var sec = sections[i];
+                if (sec.id <= 0 || sec.is_inferred_placeholder) continue;
+                if (normalizeCourseCodeForLookup(sec.course_code) !== code) continue;
+                candidates.push(sec);
+            }
+            if (!candidates.length) {
+                select.innerHTML = '<option>No exact section found for this term</option>';
+                select.disabled = true;
+                btn.disabled = true;
+                return;
+            }
+            var html = "";
+            for (var j = 0; j < candidates.length; j++) {
+                html += '<option value="' + candidates[j].id + '">' + escapeHtmlSch(sectionOptionLabel(candidates[j])) + '</option>';
+            }
+            select.innerHTML = html;
+            select.disabled = false;
+            btn.disabled = false;
+        })
+        .catch(function () {
+            if (requestId !== sectionMatchRequest) return;
+            select.innerHTML = '<option>Could not load sections</option>';
+            select.disabled = true;
+            btn.disabled = true;
+        });
+}
+
+function replacePlaceholderSection(placeholderId) {
+    var key = Math.abs(placeholderId);
+    var select = document.getElementById("sectionMatchSelect" + key);
+    if (!select || !select.value) return;
+    var selectedId = parseInt(select.value, 10);
+    if (isNaN(selectedId)) return;
+
+    var term = currentTerm();
+    var ids = getScheduleIds(term);
+    var idx = ids.indexOf(placeholderId);
+    if (idx === -1) return;
+    if (ids.indexOf(selectedId) !== -1) {
+        ids.splice(idx, 1);
+    } else {
+        ids[idx] = selectedId;
+    }
+
+    saveScheduleIds(term, ids)
+        .then(function () {
+            loadSections();
+            refreshSchedule();
+            showAlert("Transcript course matched to a section.", "success");
+        })
+        .catch(function () {
+            showAlert("Could not update the selected section. Try again.", "danger");
+        });
 }
 
 function renderGrid(sections) {
@@ -1467,12 +1634,12 @@ function renderGrid(sections) {
             if (bl.half) cls += " half-sem-block";
             html += '<div class="' + cls + '"';
             html += ' style="top:' + bl.top.toFixed(2) + '%;height:' + bl.height.toFixed(2) + '%;border-left-color:' + bl.color + ';"';
-            html += ' title="' + bl.sec.course_code + ' ' + (bl.sec.start_time || '') + '–' + (bl.sec.end_time || '') + '">';
-            html += '<div class="block-code">' + bl.sec.course_code + '</div>';
-            html += '<div class="block-detail">' + (bl.sec.start_time || '') + '–' + (bl.sec.end_time || '') + '</div>';
-            html += '<div class="block-detail">' + (bl.sec.location || '') + '</div>';
+            html += ' title="' + escapeHtmlSch(bl.sec.course_code || '') + ' ' + escapeHtmlSch(bl.sec.start_time || '') + '–' + escapeHtmlSch(bl.sec.end_time || '') + '">';
+            html += '<div class="block-code">' + escapeHtmlSch(bl.sec.course_code || '') + '</div>';
+            html += '<div class="block-detail">' + escapeHtmlSch(bl.sec.start_time || '') + '–' + escapeHtmlSch(bl.sec.end_time || '') + '</div>';
+            html += '<div class="block-detail">' + escapeHtmlSch(bl.sec.location || '') + '</div>';
             if (bl.half) {
-                html += '<div class="block-session">' + sessionLabel(bl.sec.session) + '</div>';
+                html += '<div class="block-session">' + escapeHtmlSch(sessionLabel(bl.sec.session)) + '</div>';
             }
             html += '</div>';
         }
@@ -1506,14 +1673,14 @@ function renderAddedTable(sections) {
         var inferred = !!sec.is_inferred_placeholder;
         html += '<tr class="' + (isConflict ? 'table-danger-subtle' : '') + '">';
         html += '<td><span class="color-dot" style="background:' + color + '"></span></td>';
-        html += '<td class="fw-semibold text-nowrap">' + sec.course_code + '</td>';
-        html += '<td>' + (sec.course_name || '') + '</td>';
-        html += '<td>' + (inferred ? '—' : (sec.section_code || '')) + '</td>';
+        html += '<td class="fw-semibold text-nowrap">' + escapeHtmlSch(sec.course_code || '') + '</td>';
+        html += '<td>' + escapeHtmlSch(sec.course_name || '') + '</td>';
+        html += '<td>' + (inferred ? '—' : escapeHtmlSch(sec.section_code || '')) + '</td>';
         html += '<td>';
         if (inferred) {
             html += '<span class="badge bg-light text-muted border">Planning</span>';
         } else if (half) {
-            html += '<span class="session-badge session-badge-half">' + sessionLabel(sec.session) + '</span>';
+            html += '<span class="session-badge session-badge-half">' + escapeHtmlSch(sessionLabel(sec.session)) + '</span>';
         } else {
             html += '<span class="session-badge session-badge-full">Full</span>';
         }
@@ -1525,22 +1692,18 @@ function renderAddedTable(sections) {
             html += '—';
         }
         html += '</td>';
-        html += '<td class="text-nowrap">' + (sec.days || '—') + '</td>';
+        html += '<td class="text-nowrap">' + escapeHtmlSch(sec.days || '—') + '</td>';
         html += '<td class="text-nowrap">';
         if (sec.start_time) {
-            html += sec.start_time + '–' + sec.end_time;
+            html += escapeHtmlSch(sec.start_time || '') + '–' + escapeHtmlSch(sec.end_time || '');
         } else {
             html += '—';
         }
         html += '</td>';
-        html += '<td>' + (sec.location || '—') + '</td>';
-        html += '<td class="small">' + (sec.mode || '') + '</td>';
-        html += '<td>' + (sec.credits || '') + '</td>';
-        if (READ_ONLY_SCHEDULE) {
-            html += '<td class="schedule-edit-col"></td>';
-        } else {
-            html += '<td class="schedule-edit-col"><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSection(' + sec.id + ')" title="Remove">&times;</button></td>';
-        }
+        html += '<td>' + escapeHtmlSch(sec.location || '—') + '</td>';
+        html += '<td class="small">' + escapeHtmlSch(sec.mode || '') + '</td>';
+        html += '<td>' + escapeHtmlSch(sec.credits || '') + '</td>';
+        html += '<td class="schedule-edit-col"><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSection(' + sec.id + ')" title="Remove">&times;</button></td>';
         html += '</tr>';
     }
     body.innerHTML = html;

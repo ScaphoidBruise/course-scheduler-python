@@ -69,7 +69,6 @@ def init_auth_tables():
             term_label TEXT NOT NULL,
             name TEXT NOT NULL,
             is_active INTEGER NOT NULL DEFAULT 0,
-            share_token TEXT UNIQUE,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
@@ -412,11 +411,134 @@ def init_reference_tables():
 
 def get_academic_program_names() -> list[str]:
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT name FROM academic_program_names ORDER BY name COLLATE NOCASE"
-    ).fetchall()
+    rows = conn.execute("SELECT name FROM academic_program_names").fetchall()
+    names = {r["name"] for r in rows}
+    try:
+        requirement_rows = conn.execute("SELECT program_name FROM program_requirements").fetchall()
+        names.update(r["program_name"] for r in requirement_rows)
+    except sqlite3.OperationalError:
+        pass
     conn.close()
-    return [r["name"] for r in rows]
+    return sorted(names, key=str.casefold)
+
+
+def _program_match_score(major: object, program_name: object) -> int:
+    major_text = re.sub(r"[^a-z0-9]+", " ", str(major or "").casefold()).strip()
+    program_text = re.sub(r"[^a-z0-9]+", " ", str(program_name or "").casefold()).strip()
+    if not major_text or not program_text:
+        return 0
+    program_base = re.split(r"\b(ba|bs|bba|bfa|bmus|cert|certificate|minor)\b", program_text)[0].strip()
+    if major_text == program_text or major_text == program_base:
+        return 100
+    if program_text.startswith(major_text) or program_base.startswith(major_text):
+        return 90
+    if major_text in program_text:
+        return 75
+    major_words = set(major_text.split())
+    program_words = set(program_text.split())
+    overlap = len(major_words & program_words)
+    if overlap >= 2:
+        return 50 + overlap
+    return 0
+
+
+def get_program_requirements_for_major(major: object) -> dict | None:
+    conn = get_connection()
+    try:
+        program_rows = conn.execute(
+            """
+            SELECT id, catalog_year, program_name, program_path, source_url,
+                   total_credits, degree_total_credits, fetched_at
+            FROM program_requirements
+            """
+        ).fetchall()
+    except sqlite3.OperationalError:
+        conn.close()
+        return None
+
+    best = None
+    best_score = 0
+    for row in program_rows:
+        score = _program_match_score(major, row["program_name"])
+        if score > best_score:
+            best = row
+            best_score = score
+    if not best:
+        conn.close()
+        return None
+
+    block_rows = conn.execute(
+        """
+        SELECT id, parent_block_id, heading, level, display_order,
+               requirement_type, choice_group, is_optional, min_credits, raw_notes
+        FROM program_requirement_blocks
+        WHERE program_id = ?
+        ORDER BY display_order
+        """,
+        (best["id"],),
+    ).fetchall()
+    block_ids = [row["id"] for row in block_rows]
+    courses_by_block: dict[int, list[dict]] = {block_id: [] for block_id in block_ids}
+    if block_ids:
+        placeholders = ",".join("?" for _ in block_ids)
+        course_rows = conn.execute(
+            f"""
+            SELECT block_id, course_code, course_title, credits, display_order
+            FROM program_requirement_courses
+            WHERE block_id IN ({placeholders})
+            ORDER BY block_id, display_order
+            """,
+            block_ids,
+        ).fetchall()
+        for course in course_rows:
+            courses_by_block[course["block_id"]].append(
+                {
+                    "course_code": normalize_course_code(course["course_code"]),
+                    "course_title": course["course_title"],
+                    "credits": course["credits"],
+                    "display_order": course["display_order"],
+                }
+            )
+    conn.close()
+
+    return {
+        "id": best["id"],
+        "catalog_year": best["catalog_year"],
+        "program_name": best["program_name"],
+        "program_path": best["program_path"],
+        "source_url": best["source_url"],
+        "total_credits": best["total_credits"],
+        "degree_total_credits": best["degree_total_credits"],
+        "match_score": best_score,
+        "fetched_at": best["fetched_at"],
+        "blocks": [
+            {
+                "id": block["id"],
+                "parent_block_id": block["parent_block_id"],
+                "heading": block["heading"],
+                "level": block["level"],
+                "display_order": block["display_order"],
+                "requirement_type": block["requirement_type"],
+                "choice_group": block["choice_group"],
+                "is_optional": bool(block["is_optional"]),
+                "min_credits": block["min_credits"],
+                "raw_notes": (block["raw_notes"] or "").splitlines(),
+                "courses": courses_by_block.get(block["id"], []),
+            }
+            for block in block_rows
+        ],
+    }
+
+
+def degree_total_for_profile(profile: dict) -> float | None:
+    requirements = get_program_requirements_for_major(profile.get("major"))
+    if not requirements:
+        return None
+    total = requirements.get("degree_total_credits") or requirements.get("total_credits")
+    try:
+        return float(total)
+    except (TypeError, ValueError):
+        return None
 
 
 def ensure_user_profile(user_id):
@@ -565,6 +687,16 @@ def get_completed_course_codes(user_id: int) -> set[str]:
     return completed
 
 
+def get_in_progress_course_codes(user_id: int) -> set[str]:
+    in_progress: set[str] = set()
+    for row in _transcript_course_history(user_id):
+        if _grade_from_row(row) in {"", "IP", "I"}:
+            code = _course_code_from_transcript_row(row)
+            if code:
+                in_progress.add(code)
+    return in_progress
+
+
 def _course_tokens_from_text(text: str) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
@@ -590,6 +722,22 @@ def _lookup_prereq_text(course_code: str) -> str:
     ).fetchone()
     conn.close()
     return (row["prerequisites"] if row else None) or ""
+
+
+def _lookup_catalog_course(course_code: str) -> dict | None:
+    code = normalize_course_code(course_code)
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT id, subject_code, course_number, course_code, course_name, prerequisites, term_infered
+        FROM courses
+        WHERE REPLACE(UPPER(course_code), ' ', '') = ?
+        LIMIT 1
+        """,
+        (compact_course_code(code),),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def check_prerequisites(course_code: str, completed_codes: set[str]) -> dict:
@@ -665,6 +813,78 @@ def _typical_season(term_infered: object) -> str:
     return "Unscheduled"
 
 
+def _requirement_course_for_audit(course: dict, completed_codes: set[str], in_progress_codes: set[str]) -> dict:
+    code = normalize_course_code(course.get("course_code"))
+    status = "remaining"
+    if code in completed_codes:
+        status = "completed"
+    elif code in in_progress_codes:
+        status = "in_progress"
+    return {
+        "course_code": code,
+        "course_title": course.get("course_title"),
+        "credits": course.get("credits"),
+        "status": status,
+    }
+
+
+def _requirement_block_audit(
+    block: dict,
+    completed_codes: set[str],
+    in_progress_codes: set[str],
+) -> dict:
+    courses = [
+        _requirement_course_for_audit(course, completed_codes, in_progress_codes)
+        for course in block.get("courses") or []
+        if course.get("course_code")
+    ]
+    required_type = block.get("requirement_type") or "required_all"
+    completed_courses = [course for course in courses if course["status"] == "completed"]
+    in_progress_courses = [course for course in courses if course["status"] == "in_progress"]
+    remaining_courses = [course for course in courses if course["status"] == "remaining"]
+    completed_credits = sum(float(course.get("credits") or 0) for course in completed_courses)
+    in_progress_credits = sum(float(course.get("credits") or 0) for course in in_progress_courses)
+    min_credits = block.get("min_credits")
+
+    if block.get("is_optional") or required_type == "optional":
+        status = "optional"
+    elif required_type == "choice_option":
+        status = "choose"
+    elif required_type == "choose_from" and min_credits:
+        status = "complete" if completed_credits >= float(min_credits) else "partial" if completed_courses or in_progress_courses else "remaining"
+    else:
+        status = "complete" if courses and not remaining_courses and not in_progress_courses else "partial" if completed_courses or in_progress_courses else "remaining"
+
+    return {
+        "heading": block.get("heading"),
+        "level": block.get("level"),
+        "display_order": block.get("display_order"),
+        "requirement_type": required_type,
+        "choice_group": block.get("choice_group"),
+        "is_optional": bool(block.get("is_optional")),
+        "min_credits": min_credits,
+        "raw_notes": block.get("raw_notes") or [],
+        "status": status,
+        "completed_count": len(completed_courses),
+        "in_progress_count": len(in_progress_courses),
+        "remaining_count": len(remaining_courses),
+        "course_count": len(courses),
+        "completed_credits": completed_credits,
+        "in_progress_credits": in_progress_credits,
+        "courses": courses,
+    }
+
+
+def _requirement_audit(requirements: dict, completed_codes: set[str], in_progress_codes: set[str]) -> list[dict]:
+    audit = []
+    for block in requirements.get("blocks") or []:
+        has_content = block.get("courses") or block.get("raw_notes") or block.get("min_credits") is not None
+        if not has_content:
+            continue
+        audit.append(_requirement_block_audit(block, completed_codes, in_progress_codes))
+    return audit
+
+
 def get_degree_progress(user_id: int) -> dict:
     profile = get_user_profile(user_id)
     rows = _transcript_course_history(user_id)
@@ -687,20 +907,71 @@ def get_degree_progress(user_id: int) -> dict:
     for row in list_completed_overrides(user_id):
         code = normalize_course_code(row.get("course_code"))
         if code and code not in {r["course_code"] for r in completed_rows}:
+            catalog_course = _lookup_catalog_course(code) or {}
+            credits = _credits_for_course(user_id, code)
             completed_rows.append(
                 {
                     "course_code": code,
                     "course": code,
-                    "subject": code.split(" ")[0] if " " in code else None,
-                    "course_number": code.split(" ")[1] if " " in code else None,
-                    "course_name": None,
-                    "attempted": None,
-                    "earned": None,
+                    "subject": catalog_course.get("subject_code") or (code.split(" ")[0] if " " in code else None),
+                    "course_number": catalog_course.get("course_number") or (code.split(" ")[1] if " " in code else None),
+                    "course_name": catalog_course.get("course_name"),
+                    "attempted": credits,
+                    "earned": credits,
                     "grade": row.get("grade") or "override",
-                    "term": "Manual override",
+                    "term": "Manual completed",
                     "override_id": row.get("id"),
                 }
             )
+
+    requirements = get_program_requirements_for_major(profile.get("major"))
+    if requirements:
+        audit_blocks = _requirement_audit(requirements, completed_codes, in_progress_codes)
+        remaining_by_typical_term: dict[str, list[dict]] = {
+            "Spring": [],
+            "Summer": [],
+            "Fall": [],
+            "Unscheduled": [],
+        }
+        blocked = completed_codes | in_progress_codes
+        seen_remaining: set[str] = set()
+        for block in requirements.get("blocks") or []:
+            requirement_type = block.get("requirement_type") or "required_all"
+            if block.get("is_optional") or requirement_type == "choice_option":
+                continue
+            for course in block.get("courses") or []:
+                code = normalize_course_code(course.get("course_code"))
+                if not code or code in blocked or code in seen_remaining:
+                    continue
+                seen_remaining.add(code)
+                catalog_course = _lookup_catalog_course(code) or {}
+                row = {
+                    "id": catalog_course.get("id"),
+                    "subject_code": catalog_course.get("subject_code") or code.split(" ")[0],
+                    "course_number": catalog_course.get("course_number") or code.split(" ")[1],
+                    "course_code": code,
+                    "course_name": catalog_course.get("course_name") or course.get("course_title"),
+                    "prerequisites": catalog_course.get("prerequisites"),
+                    "term_infered": catalog_course.get("term_infered"),
+                    "requirement_heading": block.get("heading"),
+                    "requirement_type": block.get("requirement_type"),
+                    "choice_group": block.get("choice_group"),
+                    "min_credits": block.get("min_credits"),
+                }
+                remaining_by_typical_term[_typical_season(row["term_infered"])].append(row)
+
+        return {
+            "completed": completed_rows,
+            "in_progress": in_progress_rows,
+            "remaining_by_typical_term": remaining_by_typical_term,
+            "program_requirements": {
+                "program_name": requirements.get("program_name"),
+                "degree_total_credits": requirements.get("degree_total_credits"),
+                "source_url": requirements.get("source_url"),
+                "match_score": requirements.get("match_score"),
+            },
+            "requirement_audit": audit_blocks,
+        }
 
     subjects = _subjects_for_degree_progress(profile, completed_rows)
     conn = get_connection()
@@ -979,7 +1250,7 @@ def export_user_bundle(user_id):
     try:
         scenario_rows = conn.execute(
             """
-            SELECT id, user_id, term_label, name, is_active, share_token, created_at
+            SELECT id, user_id, term_label, name, is_active, created_at
             FROM schedule_scenarios
             WHERE user_id = ?
             ORDER BY term_label, id
@@ -1039,7 +1310,7 @@ def get_scenarios(user_id, term_label):
         conn.commit()
         rows = conn.execute(
             """
-            SELECT id, user_id, term_label, name, is_active, share_token, created_at
+            SELECT id, user_id, term_label, name, is_active, created_at
             FROM schedule_scenarios
             WHERE user_id = ? AND term_label = ?
             ORDER BY is_active DESC, created_at, id
@@ -1055,25 +1326,11 @@ def get_scenario(user_id, scenario_id):
     conn = get_connection()
     row = conn.execute(
         """
-        SELECT id, user_id, term_label, name, is_active, share_token, created_at
+        SELECT id, user_id, term_label, name, is_active, created_at
         FROM schedule_scenarios
         WHERE id = ? AND user_id = ?
         """,
         (scenario_id, user_id),
-    ).fetchone()
-    conn.close()
-    return _scenario_dict(row)
-
-
-def get_scenario_by_token(share_token):
-    conn = get_connection()
-    row = conn.execute(
-        """
-        SELECT id, user_id, term_label, name, is_active, share_token, created_at
-        FROM schedule_scenarios
-        WHERE share_token = ?
-        """,
-        (share_token,),
     ).fetchone()
     conn.close()
     return _scenario_dict(row)
@@ -1298,24 +1555,6 @@ def delete_scenario(user_id, scenario_id):
         conn.close()
 
 
-def set_scenario_share_token(user_id, scenario_id, share_token):
-    scenario = get_scenario(user_id, scenario_id)
-    if not scenario:
-        return None
-    conn = get_connection()
-    conn.execute(
-        """
-        UPDATE schedule_scenarios
-        SET share_token = COALESCE(share_token, ?)
-        WHERE id = ? AND user_id = ?
-        """,
-        (share_token, scenario_id, user_id),
-    )
-    conn.commit()
-    conn.close()
-    return get_scenario(user_id, scenario_id)
-
-
 def get_saved_schedule_ids(user_id, term_label, scenario_id=None):
     if scenario_id is None:
         scenario_id = ensure_active_scenario(user_id, term_label)
@@ -1350,6 +1589,24 @@ def get_saved_schedule_ids_by_term(user_id):
     for row in rows:
         by_term.setdefault(row["term_label"], []).append(row["section_id"])
     return by_term
+
+
+def get_planned_course_codes_before_term(user_id: int, term_label: str) -> set[str]:
+    target = _normalize_term_label(term_label) or " ".join(str(term_label or "").split())
+    if not target:
+        return set()
+    target_key = _term_sort_key(target)
+    planned: set[str] = set()
+    by_term = get_saved_schedule_ids_by_term(user_id)
+    for label, section_ids in by_term.items():
+        norm_label = _normalize_term_label(label) or label
+        if _term_sort_key(norm_label) >= target_key:
+            continue
+        for section in get_sections_by_ids(section_ids, term_label=norm_label):
+            code = normalize_course_code(section.get("course_code"))
+            if code:
+                planned.add(code)
+    return planned
 
 
 def get_user_setting(user_id, key, default=None):
@@ -1554,6 +1811,23 @@ def _placeholder_dict_from_course_row(r: sqlite3.Row, term_label: str) -> dict:
         "session_end_date": None,
         "is_inferred_placeholder": True,
     }
+
+
+def _section_credit_fallback(conn: sqlite3.Connection, course_code: str) -> str:
+    row = conn.execute(
+        """
+        SELECT credits
+        FROM sections
+        WHERE REPLACE(UPPER(course_code), ' ', '') = ?
+          AND TRIM(COALESCE(credits, '')) != ''
+        ORDER BY id
+        LIMIT 1
+        """,
+        (compact_course_code(course_code),),
+    ).fetchone()
+    if row:
+        return str(row["credits"])
+    return "3.00"
 
 
 def _inferred_placeholder_sections(
@@ -2103,6 +2377,8 @@ def get_sections_by_ids(section_ids, term_label: str | None = None):
                         ).fetchone()
                         if credit_row:
                             d["credits"] = credit_row["credits"]
+                if not str(d.get("credits") or "").strip():
+                    d["credits"] = _section_credit_fallback(conn, r["course_code"])
                 by_sid[d["id"]] = d
 
         return [by_sid[sid] for sid in section_ids if sid in by_sid]
@@ -2142,6 +2418,33 @@ def get_all_courses(subject_code=None, search=None, level=None, term=None):
     if term:
         query += f" AND {_term_infered_sql_condition(_season_from_term_filter(term))}"
     query += " ORDER BY subject_code, course_number"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def search_courses_for_completion(subject_code=None, search=None):
+    subject = str(subject_code or "").strip().upper()
+    text = str(search or "").strip()
+    conn = get_connection()
+    query = """
+        SELECT id, subject_code, course_number, course_code, course_name,
+               course_url, prerequisites, term_infered
+        FROM courses
+        WHERE 1=1
+    """
+    params = []
+    clauses = []
+    if subject:
+        clauses.append("UPPER(subject_code) = ?")
+        params.append(subject)
+    if text:
+        clauses.append("(course_code LIKE ? OR course_name LIKE ?)")
+        params.append(f"%{text}%")
+        params.append(f"%{text}%")
+    if clauses:
+        query += " AND (" + " OR ".join(clauses) + ")"
+    query += " ORDER BY subject_code, course_number, course_name"
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]

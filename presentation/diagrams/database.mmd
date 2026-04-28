@@ -1,0 +1,65 @@
+erDiagram
+    courses ||--o{ sections : "has"
+    sections }o--|| session_calendar : "in session"
+    users ||--o{ schedule_scenarios : "owns"
+    schedule_scenarios ||--o{ user_schedules : "contains"
+    sections ||--o{ user_schedules : "added to"
+    users ||--|| user_profiles : "has"
+    users ||--o{ course_wishlist : "saves"
+    courses ||--o{ course_wishlist : "wished"
+
+    courses {
+        int id PK
+        string code
+        string name
+        string prereqs
+        string url
+        string term_inferred
+    }
+    sections {
+        int id PK
+        string term
+        string section_code
+        string days
+        string times
+        string location
+        string mode
+        string session
+    }
+    session_calendar {
+        string term
+        string session
+        date start_date
+        date end_date
+    }
+    users {
+        int id PK
+        string username
+        string password_hash
+        datetime created_at
+    }
+    user_profiles {
+        int user_id PK
+        string major
+        string minor
+        string transcript_original_name
+        json transcript_parsed_json
+    }
+    schedule_scenarios {
+        int id PK
+        int user_id FK
+        string term
+        string name
+        bool is_active
+    }
+    user_schedules {
+        int id PK
+        int user_id FK
+        int scenario_id FK
+        int section_id FK
+    }
+    course_wishlist {
+        int id PK
+        int user_id FK
+        int course_id FK
+    }

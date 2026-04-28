@@ -1,9 +1,13 @@
 import json
 import os
+import secrets
+import urllib.error
+import urllib.request
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from urllib.parse import urlparse
 
-from flask import Flask, Response, jsonify, render_template_string, request, send_from_directory, session
+from flask import Flask, Response, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -16,11 +20,14 @@ from db import (
     get_user_by_id, get_saved_schedule_ids, save_schedule_ids,
     get_saved_schedule_ids_by_term, get_user_setting, set_user_setting,
     get_scenarios, get_scenario, create_scenario, duplicate_scenario, rename_scenario,
-    activate_scenario, delete_scenario, set_scenario_share_token, get_scenario_by_token,
+    activate_scenario, delete_scenario,
     get_user_profile, update_user_profile, get_term_timeline,
     get_transcript_courses_for_term,
     get_academic_program_names,
-    get_completed_course_codes, check_prerequisites, get_degree_progress,
+    get_completed_course_codes, get_in_progress_course_codes, check_prerequisites, get_degree_progress,
+    get_planned_course_codes_before_term,
+    get_program_requirements_for_major, degree_total_for_profile,
+    search_courses_for_completion,
     list_completed_overrides, add_completed_override, delete_completed_override,
     normalize_course_code,
     change_password, change_username, delete_user_cascade,
@@ -30,14 +37,51 @@ from db import (
 from conflict import sections_conflict
 from transcript_pdf import parse_utpb_transcript_pdf, transcript_dict_to_json
 
+
+def _load_local_env():
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, encoding="utf-8") as env_file:
+        for line in env_file:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_local_env()
+
 app = Flask(__name__, static_folder="static")
-app.config["SECRET_KEY"] = os.environ.get("SCHEDULER_SECRET_KEY", "dev-change-me")
+app.config["SECRET_KEY"] = os.environ.get("SCHEDULER_SECRET_KEY") or secrets.token_hex(32)
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"),
+)
 
 init_auth_tables()
 init_profile_tables()
 init_reference_tables()
 init_wishlist_tables()
+
+
+@app.before_request
+def reject_cross_origin_mutations():
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return None
+    source = request.headers.get("Origin") or request.headers.get("Referer")
+    if not source:
+        return None
+    parsed = urlparse(source)
+    if parsed.netloc and parsed.netloc != request.host:
+        return jsonify({"error": "Cross-origin request rejected."}), 403
+    return None
 
 
 def current_user():
@@ -175,6 +219,42 @@ def _term_label_variants_for_schedule(term_label):
     return list(out)
 
 
+def _invalid_schedule_ids(term, ids):
+    if any(i == 0 for i in ids):
+        return [i for i in ids if i == 0]
+    real_ids = [i for i in ids if i > 0]
+    course_ids = [-i for i in ids if i < 0]
+    invalid: set[int] = set()
+    conn = get_connection()
+    try:
+        if real_ids:
+            term_variants = _term_label_variants_for_schedule(term)
+            id_placeholders = ",".join("?" for _ in real_ids)
+            term_placeholders = ",".join("?" for _ in term_variants)
+            rows = conn.execute(
+                f"""
+                SELECT id
+                FROM sections
+                WHERE id IN ({id_placeholders})
+                  AND term_label IN ({term_placeholders})
+                """,
+                [*real_ids, *term_variants],
+            ).fetchall()
+            valid = {int(row["id"]) for row in rows}
+            invalid.update(i for i in real_ids if i not in valid)
+        if course_ids:
+            placeholders = ",".join("?" for _ in course_ids)
+            rows = conn.execute(
+                f"SELECT id FROM courses WHERE id IN ({placeholders})",
+                course_ids,
+            ).fetchall()
+            valid_courses = {int(row["id"]) for row in rows}
+            invalid.update(-i for i in course_ids if i not in valid_courses)
+    finally:
+        conn.close()
+    return [i for i in ids if i in invalid]
+
+
 def _seed_current_term_schedule_from_transcript(user_id, parsed):
     term, rows = _current_transcript_courses(parsed)
     if not term or not rows:
@@ -279,6 +359,372 @@ def _estimate_graduation_label(terms, credits_completed, credits_target):
         running += avg_load
         guard += 1
     return cursor
+
+
+def _build_planner_overview(user_id):
+    timeline = get_term_timeline(user_id)
+    saved_by_term = get_saved_schedule_ids_by_term(user_id)
+    saved_by_label = {str(k): v for k, v in saved_by_term.items()}
+    entries_by_label = {}
+
+    for item in timeline.get("past_terms") or []:
+        if item.get("has_saved_schedule"):
+            label = item.get("label")
+            entries_by_label[label] = dict(item, is_past=True)
+
+    for item in timeline.get("terms") or []:
+        label = item.get("label")
+        entries_by_label[label] = dict(item, is_past=False)
+
+    for label in saved_by_label:
+        if label not in entries_by_label:
+            season, year = _term_parts(label)
+            entries_by_label[label] = {
+                "label": label,
+                "year": year,
+                "season": season,
+                "is_past": _term_sort_key(label) < _term_sort_key(timeline.get("scheduling_floor_label")),
+            }
+
+    terms = []
+    current_label = timeline.get("current_term") or timeline.get("scheduling_floor_label")
+    for label, entry in sorted(entries_by_label.items(), key=lambda kv: _term_sort_key(kv[0])):
+        section_ids = saved_by_label.get(label, [])
+        sections = get_sections_by_ids(section_ids, term_label=label)
+        credits = sum(_credit_value(s.get("credits")) for s in sections)
+        season, year = _term_parts(label)
+        terms.append(
+            {
+                "label": label,
+                "year": entry.get("year") if entry.get("year") is not None else year,
+                "season": entry.get("season") or season,
+                "is_past": bool(entry.get("is_past")),
+                "is_current": bool(current_label and label == current_label),
+                "section_count": len(sections),
+                "credits": _format_credit_number(credits),
+                "has_conflicts": _sections_have_conflicts(sections),
+                "sections": sections,
+            }
+        )
+
+    prof = get_user_profile(user_id)
+    credits_completed = _transfer_inclusive_credits(prof)
+    credits_planned = sum(float(t.get("credits") or 0) for t in terms)
+    scraped_degree_total = degree_total_for_profile(prof)
+    credits_target = scraped_degree_total or _planner_target_for_user(user_id)
+    return {
+        "terms": terms,
+        "totals": {
+            "credits_planned": _format_credit_number(credits_planned),
+            "credits_completed": _format_credit_number(credits_completed),
+            "credits_target": _format_credit_number(credits_target),
+            "credits_target_source": "scraped_program_requirements" if scraped_degree_total else "planner_setting",
+            "expected_graduation_label": _estimate_graduation_label(
+                terms,
+                credits_completed,
+                credits_target,
+            ),
+        },
+    }
+
+
+def _transfer_inclusive_credits(profile):
+    transcript = profile.get("transcript_parsed_json")
+    values = []
+    if isinstance(transcript, dict):
+        values.extend(
+            [
+                transcript.get("total_credit_hours"),
+                transcript.get("credits_earned"),
+            ]
+        )
+        utpb = _credit_value(transcript.get("utpb_credits_earned"))
+        transfer = _credit_value(transcript.get("transfer_earned_total"))
+        if utpb > 0 or transfer > 0:
+            values.append(utpb + transfer)
+    values.append(profile.get("credits_earned"))
+    for value in values:
+        credits = _credit_value(value)
+        if credits > 0:
+            return credits
+    return 0.0
+
+
+def _course_label(row):
+    code = (
+        row.get("course_code")
+        or row.get("course")
+        or f"{row.get('subject_code') or row.get('subject') or ''} {row.get('course_number') or ''}"
+    )
+    code = normalize_course_code(code)
+    name = row.get("course_name") or row.get("title") or row.get("name")
+    return f"{code} - {name}" if code and name else code or name or "Unknown course"
+
+
+def _ai_planner_context(user_id):
+    profile = get_user_profile(user_id)
+    progress = get_degree_progress(user_id)
+    planner = _build_planner_overview(user_id)
+
+    transcript = profile.get("transcript_parsed_json")
+    latest_courses = []
+    transfer_earned = None
+    transfer_attempted = None
+    total_credit_hours = None
+    utpb_credits = None
+    if isinstance(transcript, dict):
+        latest_courses = [
+            _course_label(row)
+            for row in transcript.get("latest_term_courses") or []
+            if isinstance(row, dict)
+        ][:8]
+        transfer_earned = transcript.get("transfer_earned_total")
+        transfer_attempted = transcript.get("transfer_attempted_total")
+        total_credit_hours = transcript.get("total_credit_hours")
+        utpb_credits = transcript.get("utpb_credits_earned")
+
+    remaining_by_term = {}
+    for season, rows in (progress.get("remaining_by_typical_term") or {}).items():
+        remaining_by_term[season] = [
+            _course_label(row)
+            for row in rows or []
+            if isinstance(row, dict)
+        ][:12]
+
+    planned_terms = []
+    for term in planner.get("terms") or []:
+        planned_terms.append(
+            {
+                "label": term.get("label"),
+                "season": term.get("season"),
+                "credits": term.get("credits"),
+                "is_current": term.get("is_current"),
+                "has_conflicts": term.get("has_conflicts"),
+                "courses": [
+                    {
+                        "course": section.get("course_code"),
+                        "name": section.get("course_name"),
+                        "credits": section.get("credits"),
+                        "days": section.get("days"),
+                        "time": " ".join(
+                            part for part in [section.get("start_time"), section.get("end_time")] if part
+                        ),
+                        "session": section.get("session"),
+                        "mode": section.get("mode"),
+                    }
+                    for section in term.get("sections") or []
+                ],
+            }
+        )
+
+    return {
+        "university": "University of Texas Permian Basin (UTPB)",
+        "student_profile": {
+            "major": profile.get("major"),
+            "minor": profile.get("minor"),
+            "has_transcript": bool(transcript),
+            "transcript_file": profile.get("transcript_original_name"),
+            "cumulative_gpa": profile.get("cumulative_gpa"),
+            "last_term_gpa": profile.get("last_term_gpa"),
+            "credits_earned": _format_credit_number(_transfer_inclusive_credits(profile)),
+            "credits_attempted": profile.get("credits_attempted"),
+            "utpb_credits_earned": utpb_credits,
+            "transfer_credits_earned": transfer_earned,
+            "transfer_credits_attempted": transfer_attempted,
+            "total_credit_hours": total_credit_hours,
+            "latest_transcript_courses": latest_courses,
+        },
+        "degree_progress": {
+            "program_requirements": progress.get("program_requirements"),
+            "remaining_by_typical_term": remaining_by_term,
+            "completed_count": len(progress.get("completed") or []),
+            "in_progress_count": len(progress.get("in_progress") or []),
+            "manual_completed_courses": [
+                _course_label(row)
+                for row in progress.get("completed") or []
+                if isinstance(row, dict) and row.get("override_id")
+            ][:20],
+        },
+        "planner": {
+            "totals": planner.get("totals"),
+            "planned_terms": planned_terms,
+        },
+    }
+
+
+def _ai_context_summary(context):
+    profile = context.get("student_profile", {})
+    totals = context.get("planner", {}).get("totals", {})
+    terms = context.get("planner", {}).get("planned_terms", [])
+    bits = []
+    major = profile.get("major") or "major not set"
+    bits.append(f"Program: {major}" + (f" with minor {profile.get('minor')}" if profile.get("minor") else ""))
+    requirement_info = context.get("degree_progress", {}).get("program_requirements") or {}
+    if requirement_info.get("program_name"):
+        total = requirement_info.get("degree_total_credits")
+        bits.append(
+            f"Matched scraped requirements: {requirement_info.get('program_name')}"
+            + (f" ({_format_credit_number(total)} credit target)" if total else "")
+        )
+    if profile.get("has_transcript"):
+        bits.append(
+            "Transcript: uploaded"
+            + (
+                f", {profile.get('credits_earned')} total earned credits"
+                if profile.get("credits_earned") is not None
+                else ""
+            )
+        )
+    else:
+        bits.append("Transcript: not uploaded yet")
+    transfer = _credit_value(profile.get("transfer_credits_earned"))
+    if transfer and transfer > 0:
+        bits.append(f"Transfer credits: {fmt_credit_for_summary(transfer)} hours counted toward totals")
+    if totals:
+        bits.append(
+            "Planner: {planned} planned credits, estimated graduation {grad}".format(
+                planned=totals.get("credits_planned", 0),
+                grad=totals.get("expected_graduation_label") or "unknown",
+            )
+        )
+    conflicts = [term.get("label") for term in terms if term.get("has_conflicts")]
+    if conflicts:
+        bits.append("Conflicts: " + ", ".join(conflicts))
+    return bits
+
+
+def fmt_credit_for_summary(value):
+    formatted = _format_credit_number(value)
+    return str(formatted)
+
+
+def _fallback_planner_advice(context, prompt=None):
+    totals = context.get("planner", {}).get("totals", {})
+    profile = context.get("student_profile", {})
+    terms = context.get("planner", {}).get("planned_terms", [])
+    remaining = context.get("degree_progress", {}).get("remaining_by_typical_term", {})
+
+    tips = []
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        tips.append("AI key is not configured, so this is rule-based advice using your profile data.")
+    if not profile.get("has_transcript"):
+        tips.append("Upload your UTPB transcript PDF on the Profile page first so I can give personalized advice.")
+    if profile.get("major"):
+        tips.append(f"Your plan is being reviewed for {profile.get('major')} at UTPB.")
+    transfer = _credit_value(profile.get("transfer_credits_earned"))
+    if transfer and transfer > 0:
+        tips.append(
+            f"{_format_credit_number(transfer)} transfer credits count toward total hours; mark matching course equivalents on Progress so requirements can be tracked."
+        )
+    if totals:
+        tips.append(
+            "You have {completed}/{target} completed credits, {planned} planned credits, and an estimated graduation term of {grad}.".format(
+                completed=totals.get("credits_completed", 0),
+                target=totals.get("credits_target", DEFAULT_PLANNER_TARGET),
+                planned=totals.get("credits_planned", 0),
+                grad=totals.get("expected_graduation_label") or "unknown",
+            )
+        )
+    conflict_terms = [term.get("label") for term in terms if term.get("has_conflicts")]
+    if conflict_terms:
+        tips.append("Resolve schedule conflicts in: " + ", ".join(conflict_terms) + ".")
+    heavy_terms = [term.get("label") for term in terms if float(term.get("credits") or 0) >= 18]
+    if heavy_terms:
+        tips.append("Consider lightening high-credit terms: " + ", ".join(heavy_terms) + ".")
+    if remaining:
+        next_bucket = next((name for name, rows in remaining.items() if rows), None)
+        if next_bucket:
+            tips.append(f"Prioritize remaining {next_bucket} courses when building upcoming UTPB terms.")
+    if len(tips) < 2:
+        tips.append("Add transcript and saved schedule data to receive more personalized planning advice.")
+    if prompt:
+        tips.append("Ask follow-up questions after adding more schedule or transcript detail.")
+    return "\n".join(f"- {tip}" for tip in tips[:6])
+
+
+def _normalized_chat_messages(messages):
+    clean = []
+    for item in messages or []:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = str(item.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        clean.append({"role": role, "content": content[:2000]})
+    if not clean:
+        clean.append(
+            {
+                "role": "user",
+                "content": "Summarize what you know about me and give one next planning step.",
+            }
+        )
+    return clean[-10:]
+
+
+def _anthropic_messages_for_context(context, chat_messages):
+    clean = _normalized_chat_messages(chat_messages)
+    context_text = (
+        "Current student planning context JSON:\n"
+        + json.dumps(context, ensure_ascii=True, indent=2)
+        + "\n\nUse this context for the conversation. If the transcript is missing, prompt the student to upload the PDF on Profile."
+    )
+    if clean[0]["role"] == "user":
+        messages = [{"role": "user", "content": context_text + "\n\nStudent: " + clean[0]["content"]}]
+        rest = clean[1:]
+    else:
+        messages = [{"role": "user", "content": context_text}]
+        rest = clean
+    for item in rest:
+        if messages[-1]["role"] == item["role"]:
+            messages[-1]["content"] += "\n\n" + item["content"]
+        else:
+            messages.append(item)
+    return messages
+
+
+def _call_ai_planner_advisor(context, chat_messages=None):
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+    url = os.environ.get("ANTHROPIC_MESSAGES_URL", "https://api.anthropic.com/v1/messages")
+    system_prompt = (
+        "You are an academic planning assistant for the University of Texas Permian Basin, also known as UTPB. "
+        "Use only the provided student profile, transcript summary, degree progress, and saved planner terms. "
+        "Do not invent UTPB degree requirements or guarantee graduation. "
+        "Transfer credits count toward total credit hours, but transfer course equivalencies must be manually marked on the Progress page. "
+        "If no transcript PDF is uploaded, prompt the student to upload it on the Profile page before expecting personalized advice. "
+        "Give practical, concise advice about credit load, conflicts, GPA risk, missing context, and next planning steps. "
+        "Keep replies brief and useful."
+    )
+    payload = {
+        "model": model,
+        "system": system_prompt,
+        "temperature": 0.3,
+        "max_tokens": 450,
+        "messages": _anthropic_messages_for_context(context, chat_messages),
+    }
+    request_body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=request_body,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=25) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    text_blocks = [
+        block.get("text", "")
+        for block in data.get("content", [])
+        if isinstance(block, dict) and block.get("type") == "text"
+    ]
+    return "\n".join(text_blocks).strip()
 
 
 def _parse_days(days):
@@ -457,86 +903,6 @@ def progress_page():
     return send_from_directory("pages", "progress.html")
 
 
-@app.route("/share/<token>")
-def share_page(token):
-    scenario = get_scenario_by_token(token)
-    if not scenario:
-        return "Shared schedule not found.", 404
-    ids = get_saved_schedule_ids(scenario["user_id"], scenario["term_label"], scenario["id"])
-    sections = get_sections_by_ids(ids, term_label=scenario["term_label"])
-    share_data = {
-        "scenario": scenario,
-        "ids": ids,
-        "sections": sections,
-    }
-    return render_template_string(
-        """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shared Schedule - UTPB Scheduler</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="/static/style.css" rel="stylesheet">
-</head>
-<body class="share-page">
-    <nav class="navbar navbar-expand-lg main-nav">
-        <div class="container-fluid px-4">
-            <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
-            <span class="navbar-text text-light small">Read-only shared schedule</span>
-        </div>
-    </nav>
-    <div class="content-area">
-        <div class="container-fluid px-4 py-3">
-            <div id="alertBox"></div>
-            <div id="summaryBar" class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                <div>
-                    <span class="fw-bold" id="termLabel"></span>
-                    <span class="mx-1 text-muted">&middot;</span>
-                    <span class="fw-bold" id="sectionCount">0</span>
-                    <span class="text-muted small">sections</span>
-                    <span class="mx-1 text-muted">&middot;</span>
-                    <span class="fw-bold" id="creditCount">0.0</span>
-                    <span class="text-muted small">credit hrs</span>
-                    <span id="conflictBadge" class="mx-1 d-none">
-                        <span class="mx-1 text-muted">&middot;</span>
-                        <span class="text-danger fw-bold small" id="conflictText"></span>
-                    </span>
-                </div>
-                <span class="badge rounded-pill bg-light text-muted border">Read only</span>
-            </div>
-            <div class="grid-wrapper">
-                <div class="weekly-grid" id="weeklyGrid"></div>
-            </div>
-            <div id="addedTableWrap" class="mt-3 d-none">
-                <h6>Added Sections</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm section-table align-middle">
-                        <thead>
-                            <tr>
-                                <th></th><th>Course</th><th>Title</th><th>&sect;</th>
-                                <th>Session</th><th>Dates</th><th>Days</th><th>Time</th>
-                                <th>Location</th><th>Mode</th><th>Hrs</th><th class="schedule-edit-col"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="addedBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script>
-        window.SCHEDULE_SHARE_DATA = {{ share_json|safe }};
-    </script>
-    <script src="/static/schedule.js"></script>
-</body>
-</html>
-        """,
-        share_json=json.dumps(share_data).replace("</", "<\\/"),
-    )
-
-
 @app.route("/api/terms")
 def api_terms():
     return jsonify(get_terms())
@@ -560,72 +926,50 @@ def api_planner_overview():
         return auth_error
 
     try:
-        timeline = get_term_timeline(user["id"])
-        saved_by_term = get_saved_schedule_ids_by_term(user["id"])
-        saved_by_label = {str(k): v for k, v in saved_by_term.items()}
-        entries_by_label = {}
-
-        for item in timeline.get("past_terms") or []:
-            if item.get("has_saved_schedule"):
-                label = item.get("label")
-                entries_by_label[label] = dict(item, is_past=True)
-
-        for item in timeline.get("terms") or []:
-            label = item.get("label")
-            entries_by_label[label] = dict(item, is_past=False)
-
-        for label in saved_by_label:
-            if label not in entries_by_label:
-                season, year = _term_parts(label)
-                entries_by_label[label] = {
-                    "label": label,
-                    "year": year,
-                    "season": season,
-                    "is_past": _term_sort_key(label) < _term_sort_key(timeline.get("scheduling_floor_label")),
-                }
-
-        terms = []
-        current_label = timeline.get("current_term") or timeline.get("scheduling_floor_label")
-        for label, entry in sorted(entries_by_label.items(), key=lambda kv: _term_sort_key(kv[0])):
-            section_ids = saved_by_label.get(label, [])
-            sections = get_sections_by_ids(section_ids, term_label=label)
-            credits = sum(_credit_value(s.get("credits")) for s in sections)
-            season, year = _term_parts(label)
-            terms.append(
-                {
-                    "label": label,
-                    "year": entry.get("year") if entry.get("year") is not None else year,
-                    "season": entry.get("season") or season,
-                    "is_past": bool(entry.get("is_past")),
-                    "is_current": bool(current_label and label == current_label),
-                    "section_count": len(sections),
-                    "credits": _format_credit_number(credits),
-                    "has_conflicts": _sections_have_conflicts(sections),
-                    "sections": sections,
-                }
-            )
-
-        prof = get_user_profile(user["id"])
-        credits_completed = _credit_value(prof.get("credits_earned"))
-        credits_planned = sum(float(t.get("credits") or 0) for t in terms)
-        credits_target = _planner_target_for_user(user["id"])
-        return jsonify(
-            {
-                "terms": terms,
-                "totals": {
-                    "credits_planned": _format_credit_number(credits_planned),
-                    "credits_completed": _format_credit_number(credits_completed),
-                    "credits_target": _format_credit_number(credits_target),
-                    "expected_graduation_label": _estimate_graduation_label(
-                        terms,
-                        credits_completed,
-                        credits_target,
-                    ),
-                },
-            }
-        )
+        return jsonify(_build_planner_overview(user["id"]))
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": "Could not build planner overview.", "detail": str(exc)}), 500
+
+
+@app.route("/api/ai/planner-advice", methods=["POST"])
+def api_ai_planner_advice():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    payload = request.get_json(silent=True) or {}
+    messages = payload.get("messages") or []
+    prompt = ""
+    clean_messages = _normalized_chat_messages(messages)
+    for item in reversed(clean_messages):
+        if item.get("role") == "user":
+            prompt = item.get("content") or ""
+            break
+
+    try:
+        context = _ai_planner_context(user["id"])
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": "Could not build AI planner context.", "detail": str(exc)}), 500
+
+    summary = _ai_context_summary(context)
+    try:
+        advice = _call_ai_planner_advisor(context, clean_messages)
+        if advice:
+            return jsonify({"reply": advice, "advice": advice, "source": "ai", "context_summary": summary})
+    except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError, TimeoutError) as exc:
+        fallback = _fallback_planner_advice(context, prompt)
+        return jsonify(
+            {
+                "reply": fallback,
+                "advice": fallback,
+                "source": "fallback",
+                "context_summary": summary,
+                "warning": f"AI service unavailable: {exc}",
+            }
+        )
+
+    fallback = _fallback_planner_advice(context, prompt)
+    return jsonify({"reply": fallback, "advice": fallback, "source": "fallback", "context_summary": summary})
 
 
 @app.route("/api/planner-target", methods=["GET", "POST"])
@@ -699,6 +1043,37 @@ def api_courses():
         level=request.args.get("level") or None,
         term=request.args.get("term") or None,
     ))
+
+
+@app.route("/api/completion-course-search")
+def api_completion_course_search():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    return jsonify(
+        search_courses_for_completion(
+            subject_code=request.args.get("subject") or None,
+            search=request.args.get("search") or None,
+        )
+    )
+
+
+@app.route("/api/program-requirements/me")
+def api_my_program_requirements():
+    user, auth_error = require_auth()
+    if auth_error:
+        return auth_error
+    profile = get_user_profile(user["id"])
+    requirements = get_program_requirements_for_major(profile.get("major"))
+    if not requirements:
+        return jsonify(
+            {
+                "program": None,
+                "major": profile.get("major"),
+                "message": "No scraped requirement record matched this profile major.",
+            }
+        )
+    return jsonify({"major": profile.get("major"), "program": requirements})
 
 
 @app.route("/api/courses/<int:course_id>")
@@ -869,13 +1244,14 @@ def api_degree_progress_overview():
     profile = get_user_profile(user["id"])
 
     completed_rows = progress.get("completed") or []
-    credits_completed = 0.0
+    row_credits_completed = 0.0
     for row in completed_rows:
-        credits_completed += _credit_value(row.get("attempted") or row.get("earned"))
-    if credits_completed <= 0:
-        credits_completed = _credit_value(profile.get("credits_earned"))
+        row_credits_completed += _credit_value(row.get("attempted") or row.get("earned"))
+    transcript_credits_completed = _transfer_inclusive_credits(profile)
+    credits_completed = max(row_credits_completed, transcript_credits_completed)
 
-    credits_target = _planner_target_for_user(user["id"])
+    scraped_degree_total = degree_total_for_profile(profile)
+    credits_target = scraped_degree_total or _planner_target_for_user(user["id"])
     if credits_target <= 0:
         credits_target = float(DEFAULT_PLANNER_TARGET)
 
@@ -895,31 +1271,42 @@ def api_degree_progress_overview():
 
     scope_subjects: list[str] = []
     seen: set[str] = set()
-    for row in completed_rows:
-        subj = (row.get("subject") or "").upper()
-        if subj and subj not in seen:
-            seen.add(subj)
-            scope_subjects.append(subj)
+    for season in ("Spring", "Summer", "Fall", "Unscheduled"):
+        for row in remaining_buckets.get(season) or []:
+            subj = (row.get("subject_code") or "").upper()
+            if subj and subj not in seen:
+                seen.add(subj)
+                scope_subjects.append(subj)
     if not scope_subjects:
-        for season in ("Spring", "Summer", "Fall", "Unscheduled"):
-            for row in remaining_buckets.get(season) or []:
-                subj = (row.get("subject_code") or "").upper()
-                if subj and subj not in seen:
-                    seen.add(subj)
-                    scope_subjects.append(subj)
+        for row in completed_rows:
+            subj = (row.get("subject") or "").upper()
+            if subj and subj not in seen:
+                seen.add(subj)
+                scope_subjects.append(subj)
 
     has_transcript = bool(profile.get("transcript_parsed_json"))
+    transcript = profile.get("transcript_parsed_json")
+    transfer_credits = 0.0
+    if isinstance(transcript, dict):
+        transfer_credits = _credit_value(transcript.get("transfer_earned_total"))
 
     return jsonify(
         {
             "credits_completed": _format_credit_number(credits_completed),
             "credits_target": int(round(float(credits_target))),
+            "credits_target_source": "scraped_program_requirements" if scraped_degree_total else "planner_setting",
             "percent_complete": round(percent, 1),
             "courses_remaining_count": courses_remaining_count,
             "scope_subjects": scope_subjects,
             "has_transcript": has_transcript,
             "major": profile.get("major"),
             "minor": profile.get("minor"),
+            "transfer_credits": _format_credit_number(transfer_credits),
+            "transfer_note": (
+                "Transfer hours count toward total credits. Mark matching course equivalents as completed below."
+                if transfer_credits > 0
+                else ""
+            ),
         }
     )
 
@@ -930,6 +1317,10 @@ def api_prereq_check():
     if auth_error:
         return auth_error
     completed = get_completed_course_codes(user["id"])
+    completed |= get_in_progress_course_codes(user["id"])
+    term = (request.args.get("term") or "").strip()
+    if term:
+        completed |= get_planned_course_codes_before_term(user["id"], term)
     raw_codes = request.args.get("codes")
     if raw_codes:
         out = {}
@@ -960,6 +1351,20 @@ def api_add_completed_override():
     grade = (payload.get("grade") or "").strip() or None
     if not course_code:
         return jsonify({"error": "course_code is required"}), 400
+    normalized_code = normalize_course_code(course_code)
+    progress = get_degree_progress(user["id"])
+    completed_codes = {
+        normalize_course_code(row.get("course_code") or row.get("course"))
+        for row in progress.get("completed") or []
+    }
+    in_progress_codes = {
+        normalize_course_code(row.get("course_code") or row.get("course"))
+        for row in progress.get("in_progress") or []
+    }
+    if normalized_code in completed_codes:
+        return jsonify({"error": f"{normalized_code} is already marked completed."}), 409
+    if normalized_code in in_progress_codes:
+        return jsonify({"error": f"{normalized_code} is currently in progress."}), 409
     try:
         row = add_completed_override(user["id"], course_code, grade)
     except ValueError as exc:
@@ -1220,23 +1625,6 @@ def api_scenario_ics(scenario_id):
     )
 
 
-@app.route("/api/scenarios/<int:scenario_id>/share", methods=["POST"])
-def api_share_scenario(scenario_id):
-    user, auth_error = require_auth()
-    if auth_error:
-        return auth_error
-    scenario = set_scenario_share_token(user["id"], scenario_id, uuid.uuid4().hex)
-    if not scenario:
-        return jsonify({"error": "Scenario not found"}), 404
-    return jsonify(
-        {
-            "ok": True,
-            "share_token": scenario["share_token"],
-            "url": f"/share/{scenario['share_token']}",
-        }
-    )
-
-
 @app.route("/api/my-schedule")
 def api_get_my_schedule():
     user, auth_error = require_auth()
@@ -1291,6 +1679,15 @@ def api_save_my_schedule():
             clean_ids.append(int(value))
         except (TypeError, ValueError):
             return jsonify({"error": "ids must contain integers"}), 400
+
+    invalid_ids = _invalid_schedule_ids(term, clean_ids)
+    if invalid_ids:
+        return jsonify(
+            {
+                "error": "Schedule contains section IDs that do not match this term.",
+                "invalid_ids": invalid_ids,
+            }
+        ), 400
 
     save_schedule_ids(user["id"], term, clean_ids, scenario_id)
     return jsonify({"ok": True})

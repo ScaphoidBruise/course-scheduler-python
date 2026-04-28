@@ -159,6 +159,11 @@ class PlannerApiTest(unittest.TestCase):
             json={"term": "Spring 2027", "ids": [3]},
         )
         self.assertEqual(spring_saved.status_code, 200)
+        future_saved = self.client.post(
+            "/api/my-schedule",
+            json={"term": "Fall 2028", "ids": [-1]},
+        )
+        self.assertEqual(future_saved.status_code, 200)
 
         overview = self.client.get("/api/planner-overview")
         self.assertEqual(overview.status_code, 200)
@@ -172,12 +177,50 @@ class PlannerApiTest(unittest.TestCase):
 
         self.assertEqual(terms["Spring 2027"]["credits"], 4)
         self.assertFalse(terms["Spring 2027"]["has_conflicts"])
+        self.assertEqual(terms["Fall 2028"]["credits"], 3)
+        self.assertTrue(terms["Fall 2028"]["sections"][0]["is_inferred_placeholder"])
         self.assertEqual(data["totals"]["credits_completed"], 60)
-        self.assertEqual(data["totals"]["credits_planned"], 10)
+        self.assertEqual(data["totals"]["credits_planned"], 13)
 
         target = self.client.post("/api/planner-target", json={"credits_target": 132})
         self.assertEqual(target.status_code, 200)
         self.assertEqual(target.get_json()["credits_target"], 132)
+
+    def test_prereq_check_counts_earlier_planned_terms(self):
+        register = self.client.post(
+            "/api/register",
+            json={
+                "username": "prereq_user",
+                "password": "password123",
+                "confirm_password": "password123",
+            },
+        )
+        self.assertEqual(register.status_code, 201)
+
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            "UPDATE courses SET prerequisites = 'MATH 2413' WHERE course_code = 'ENGL 1301'"
+        )
+        conn.commit()
+        conn.close()
+
+        fall_saved = self.client.post(
+            "/api/my-schedule",
+            json={"term": "Fall 2026", "ids": [2]},
+        )
+        self.assertEqual(fall_saved.status_code, 200)
+
+        without_term = self.client.get("/api/prereq-check?codes=ENGL1301")
+        self.assertEqual(without_term.status_code, 200)
+        self.assertEqual(without_term.get_json()["ENGL 1301"]["missing"], ["MATH 2413"])
+
+        same_term = self.client.get("/api/prereq-check?codes=ENGL1301&term=Fall%202026")
+        self.assertEqual(same_term.status_code, 200)
+        self.assertEqual(same_term.get_json()["ENGL 1301"]["missing"], ["MATH 2413"])
+
+        later_term = self.client.get("/api/prereq-check?codes=ENGL1301&term=Spring%202027")
+        self.assertEqual(later_term.status_code, 200)
+        self.assertEqual(later_term.get_json()["ENGL 1301"]["missing"], [])
 
     def test_transcript_current_courses_seed_schedule_and_planner(self):
         register = self.client.post(
