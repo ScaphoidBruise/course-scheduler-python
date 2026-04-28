@@ -914,6 +914,162 @@ def get_user_by_id(user_id):
     return dict(row) if row else None
 
 
+def change_password(user_id, new_password_hash):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (new_password_hash, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def change_username(user_id, new_username):
+    """Returns False if the new username is already taken (UNIQUE constraint)."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE users SET username = ? WHERE id = ?",
+            (new_username, user_id),
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+
+def delete_user_cascade(user_id):
+    """Remove all rows owned by user_id, then the users row itself.
+
+    Most child tables already declare ``ON DELETE CASCADE`` against ``users(id)``,
+    but PRAGMA foreign_keys is not always honored on legacy databases, so we
+    delete from each table explicitly to be safe and idempotent.
+    """
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        for stmt in (
+            "DELETE FROM user_schedules WHERE user_id = ?",
+            "DELETE FROM schedule_scenarios WHERE user_id = ?",
+            "DELETE FROM completed_overrides WHERE user_id = ?",
+            "DELETE FROM user_settings WHERE user_id = ?",
+            "DELETE FROM course_wishlist WHERE user_id = ?",
+            "DELETE FROM user_profiles WHERE user_id = ?",
+            "DELETE FROM users WHERE id = ?",
+        ):
+            try:
+                conn.execute(stmt, (user_id,))
+            except sqlite3.OperationalError:
+                # Table may not exist on very old DBs; skip gracefully.
+                continue
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def account_summary(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        return None
+    profile = get_user_profile(user_id)
+    has_transcript = bool(profile.get("transcript_parsed_json"))
+
+    conn = get_connection()
+    try:
+        saved_count_row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT term_label) AS c
+            FROM schedule_scenarios
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+        saved_count = int(saved_count_row["c"] or 0) if saved_count_row else 0
+
+        sections_row = conn.execute(
+            "SELECT COUNT(1) AS c FROM user_schedules WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        sections_count = int(sections_row["c"] or 0) if sections_row else 0
+    finally:
+        conn.close()
+
+    return {
+        "username": user.get("username"),
+        "created_at": user.get("created_at"),
+        "transcript_on_file": has_transcript,
+        "saved_schedules_count": saved_count,
+        "total_sections_in_schedules": sections_count,
+    }
+
+
+def export_user_bundle(user_id):
+    """Aggregate everything a user owns for the /api/account/export endpoint."""
+    user = get_user_by_id(user_id)
+    if not user:
+        return None
+    profile = get_user_profile(user_id)
+    overrides = list_completed_overrides(user_id)
+    wishlist = get_wishlist(user_id)
+
+    conn = get_connection()
+    try:
+        scenario_rows = conn.execute(
+            """
+            SELECT id, user_id, term_label, name, is_active, share_token, created_at
+            FROM schedule_scenarios
+            WHERE user_id = ?
+            ORDER BY term_label, id
+            """,
+            (user_id,),
+        ).fetchall()
+        scenarios = []
+        for row in scenario_rows:
+            sec_rows = conn.execute(
+                """
+                SELECT section_id
+                FROM user_schedules
+                WHERE user_id = ? AND term_label = ? AND scenario_id = ?
+                ORDER BY section_id
+                """,
+                (user_id, row["term_label"], row["id"]),
+            ).fetchall()
+            entry = dict(row)
+            entry["section_ids"] = [r["section_id"] for r in sec_rows]
+            scenarios.append(entry)
+
+        settings_rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE user_id = ? ORDER BY key",
+            (user_id,),
+        ).fetchall()
+        settings = [dict(r) for r in settings_rows]
+    finally:
+        conn.close()
+
+    return {
+        "user": {
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "created_at": user.get("created_at"),
+        },
+        "profile": {
+            "major": profile.get("major"),
+            "minor": profile.get("minor"),
+            "transcript_original_name": profile.get("transcript_original_name"),
+            "transcript_parsed_json": profile.get("transcript_parsed_json"),
+        },
+        "completed_overrides": overrides,
+        "scenarios": scenarios,
+        "wishlist": wishlist,
+        "user_settings": settings,
+    }
+
+
 def _scenario_dict(row):
     return dict(row) if row else None
 

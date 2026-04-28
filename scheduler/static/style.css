@@ -975,3 +975,124 @@ select.term-plan-select option {
     background: #ccc;
     border-radius: 3px;
 }
+
+/* === PROGRESS PAGE (Agent) === */
+.profile-degree-overview {
+    border-left: 4px solid var(--accent);
+    background: linear-gradient(135deg, #ffffff 0%, var(--surface) 100%);
+}
+
+.profile-degree-progress {
+    height: 0.6rem;
+    border-radius: 999px;
+    background: rgba(10, 22, 40, 0.08);
+}
+
+.profile-degree-progress .progress-bar {
+    background: linear-gradient(90deg, var(--accent) 0%, #f59e0b 100%);
+    border-radius: 999px;
+}
+
+.progress-hero {
+    border-left: 4px solid var(--accent);
+    background: linear-gradient(135deg, #ffffff 0%, var(--surface) 100%);
+}
+
+.progress-hero-number {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--navy-deep);
+    line-height: 1.05;
+}
+
+.progress-hero-divider {
+    color: var(--text-muted);
+    font-weight: 400;
+    margin: 0 0.15rem;
+}
+
+.progress-hero-bar {
+    height: 0.7rem;
+    border-radius: 999px;
+    background: rgba(10, 22, 40, 0.08);
+}
+
+.progress-hero-bar .progress-bar {
+    background: linear-gradient(90deg, var(--accent) 0%, #f59e0b 100%);
+    border-radius: 999px;
+}
+
+.progress-target-form {
+    min-width: 12rem;
+}
+
+.progress-card {
+    background: var(--card-bg);
+}
+
+.progress-card-completed {
+    border-left: 3px solid var(--success-green) !important;
+}
+
+.progress-card-in-progress {
+    border-left: 3px solid #3b82f6 !important;
+}
+
+.progress-card-remaining {
+    border-left: 3px solid var(--accent) !important;
+}
+
+.progress-completed-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.progress-in-progress-list .list-group-item {
+    border-color: rgba(10, 22, 40, 0.05);
+}
+
+.progress-in-progress-badge {
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+}
+
+.progress-remaining-pill {
+    border-radius: 999px;
+    font-weight: 600;
+    padding: 0.22rem 0.7rem;
+}
+
+.progress-remaining-pill:hover,
+.progress-remaining-pill:focus {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(232, 86, 42, 0.08);
+}
+
+.progress-remaining-accordion .accordion-button {
+    font-weight: 600;
+    background: #fff;
+}
+
+.progress-remaining-accordion .accordion-button:not(.collapsed) {
+    color: var(--accent);
+    background: rgba(232, 86, 42, 0.06);
+    box-shadow: none;
+}
+
+.progress-popover-form {
+    min-width: 12rem;
+}
+
+.progress-popover-form .progress-popover-grade {
+    width: 100%;
+}
+/* === END PROGRESS PAGE === */
+

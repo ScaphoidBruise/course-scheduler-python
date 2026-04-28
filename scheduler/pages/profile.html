@@ -19,6 +19,7 @@
                     <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
                     <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
                     <li class="nav-item"><a class="nav-link active" href="/profile">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/progress">Progress</a></li>
                     <li class="nav-item"><a class="nav-link" href="/planner">Planner</a></li>
                     <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
@@ -223,41 +224,32 @@
             </div>
 
             <div class="row g-3 mb-3">
-                <div class="col-12 col-xl-10">
-                    <div class="card shadow-sm h-100 degree-progress-card">
-                        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-                            <span class="fw-semibold">Degree progress</span>
-                            <span class="small text-muted">Transcript courses plus manual completed-course overrides</span>
-                        </div>
-                        <div class="card-body small">
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <h6 class="text-muted text-uppercase small mb-2">Completed</h6>
-                                    <div id="degreeCompletedList" class="degree-progress-list">
-                                        <p class="text-muted mb-0">Loading…</p>
+                <div class="col-12 col-xl-8">
+                    <div class="card shadow-sm h-100 border-0 profile-degree-overview">
+                        <div class="card-body py-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small text-uppercase letter-spacing-tight">Degree progress</span>
+                                <a class="small fw-semibold" href="/progress">View full progress →</a>
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+                                <div>
+                                    <div class="fs-5 fw-semibold">
+                                        <span id="overviewCreditsEarned">—</span> /
+                                        <span id="overviewCreditsTarget">—</span>
                                     </div>
+                                    <div class="text-muted small">credits earned / target</div>
                                 </div>
-                                <div class="col-md-4">
-                                    <h6 class="text-muted text-uppercase small mb-2">In progress</h6>
-                                    <div id="degreeInProgressList" class="degree-progress-list">
-                                        <p class="text-muted mb-0">Loading…</p>
-                                    </div>
+                                <div>
+                                    <div class="fs-5 fw-semibold" id="overviewRemainingCount">—</div>
+                                    <div class="text-muted small">courses still required</div>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                        <h6 class="text-muted text-uppercase small mb-0">Remaining</h6>
-                                        <select id="degreeOverrideGrade" class="form-select form-select-sm degree-grade-select" aria-label="Grade for mark as done">
-                                            <option value="">Grade</option>
-                                            <option>A</option><option>A-</option><option>B+</option><option>B</option><option>B-</option>
-                                            <option>C+</option><option>C</option><option>C-</option><option>D+</option><option>D</option><option>D-</option>
-                                            <option>P</option><option>CR</option><option>S</option>
-                                        </select>
-                                    </div>
-                                    <div id="degreeRemainingList" class="degree-progress-list">
-                                        <p class="text-muted mb-0">Loading…</p>
-                                    </div>
-                                    <p class="text-muted small mt-2 mb-0">Click a remaining course to mark it as completed manually.</p>
-                                </div>
+                            </div>
+                            <div class="progress profile-degree-progress" role="progressbar" aria-label="Degree progress">
+                                <div id="overviewProgressBar" class="progress-bar" style="width:0%"></div>
+                            </div>
+                            <div class="text-muted small mt-2" id="overviewScopeLine"></div>
+                            <div id="overviewEmptyState" class="alert alert-light border small mt-2 mb-0 d-none">
+                                Upload a transcript on this page to start tracking credits.
                             </div>
                         </div>
                     </div>
