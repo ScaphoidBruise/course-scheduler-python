@@ -98,7 +98,7 @@ The suite covers prereq parsing, the planner overview API, scenario lifecycle, t
 
 ## Degree progress & prereq awareness
 
-After a transcript is imported, the Profile page uses parsed course history to show completed, in-progress, and still-needed courses for the detected program subjects. You can manually mark a remaining course as completed for transfer or parser misses, and the GPA what-if card projects cumulative GPA from saved schedule courses and selected grades.
+After a transcript is imported, the `/progress` page uses parsed course history to show completed, in-progress, and still-needed courses for the detected program subjects. You can manually mark a remaining course as completed for transfer or parser misses. The Profile page keeps a compact overview tile that links into `/progress`.
 
 The Schedule page checks visible section cards against completed transcript courses and manual overrides. When catalog prerequisite text can be parsed as `SUBJ ####` course requirements, missing prerequisites appear as red chips; free-text-only requirements such as instructor consent are treated as unparseable instead of blocking.
 

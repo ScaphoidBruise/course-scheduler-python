@@ -257,8 +257,7 @@ body {
     background: rgba(232, 86, 42, 0.08);
 }
 
-.degree-grade-select,
-.gpa-whatif-grade {
+.degree-grade-select {
     max-width: 8rem;
 }
 
@@ -269,11 +268,6 @@ body {
     letter-spacing: 0.04em;
     margin-bottom: 0.3rem;
     text-transform: uppercase;
-}
-
-.gpa-whatif-summary {
-    background: #f8fafc;
-    border: 1px solid rgba(10, 22, 40, 0.08);
 }
 
 .text-navy-deep {
