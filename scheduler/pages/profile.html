@@ -8,7 +8,7 @@
     <link href="/static/style.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg main-nav">
+    <nav class="navbar navbar-expand-md main-nav">
         <div class="container-fluid px-4">
             <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
@@ -17,14 +17,15 @@
             <div class="collapse navbar-collapse" id="navContent">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/planner">Planner</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/progress">Progress</a></li>
                     <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
-                    <li class="nav-item"><a class="nav-link active" href="/profile">Profile</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
                 </ul>
-                <ul class="navbar-nav">
+                <ul class="navbar-nav align-items-center gap-2">
                     <li class="nav-item"><a class="nav-link account-link" href="/account">Account</a></li>
-                    <li class="nav-item"><button id="logoutBtn" class="btn btn-sm btn-outline-danger ms-lg-2 mt-2 mt-lg-0" type="button">Logout</button></li>
+                    <li class="nav-item"><a class="nav-link active" href="/profile">Academic Profile</a></li>
+                    <li class="nav-item"><button id="logoutBtn" class="btn btn-sm btn-outline-danger ms-md-2 align-self-center" type="button">Logout</button></li>
                 </ul>
             </div>
         </div>
@@ -63,23 +64,86 @@
 
             <div id="profileBodyContent" class="d-none" aria-busy="true">
 
-            <div class="row g-3 mb-3">
+            <div class="row g-3 mb-3 profile-program-cards-row">
                 <div class="col-sm-6 col-lg">
-                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
-                        <div class="card-body py-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="text-muted small text-uppercase">Major</div>
-                                <button id="editProgramBtn" class="btn btn-outline-accent btn-xs" type="button">Edit</button>
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card profile-program-card">
+                        <div class="card-body py-3 d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <span class="text-muted small text-uppercase letter-spacing-tight">Major</span>
+                                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                    <span class="small text-muted profile-field-status profile-field-status-gated flex-shrink-0 d-none text-end"
+                                          id="majorFieldStatus" aria-live="polite" style="min-width:3.5rem;"></span>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-accent profile-program-field-btn flex-shrink-0"
+                                            id="majorEditToggleBtn"
+                                            aria-expanded="false"
+                                            aria-controls="majorEditWrap majorComboMenu">
+                                        Edit
+                                    </button>
+                                </div>
                             </div>
-                            <div class="fs-5 fw-semibold" id="statMajor">—</div>
+                            <div class="profile-program-display rounded-3 px-3 py-2 flex-grow-1 d-flex align-items-center" id="majorDisplayWrap">
+                                <span class="profile-program-display-text flex-grow-1 min-w-0" id="majorDisplay">&mdash;</span>
+                            </div>
+                            <div class="position-relative profile-combobox d-none mt-2" id="majorEditWrap">
+                                <label class="visually-hidden" for="majorComboInput">Major</label>
+                                <input type="text"
+                                       id="majorComboInput"
+                                       class="form-control form-control-sm profile-combobox-input"
+                                       placeholder="Type to search or choose…"
+                                       autocomplete="off"
+                                       spellcheck="false"
+                                       role="combobox"
+                                       aria-autocomplete="list"
+                                       aria-expanded="false"
+                                       aria-controls="majorComboMenu"
+                                       tabindex="-1"/>
+                                <ul class="profile-combobox-menu list-group position-absolute shadow border-0 rounded-2 d-none overflow-auto"
+                                    id="majorComboMenu"
+                                    role="listbox"
+                                    hidden></ul>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-sm-6 col-lg">
-                    <div class="card shadow-sm h-100 border-0 profile-stat-card">
-                        <div class="card-body py-3">
-                            <div class="text-muted small text-uppercase">Minor</div>
-                            <div class="fs-5 fw-semibold" id="statMinor">—</div>
+                    <div class="card shadow-sm h-100 border-0 profile-stat-card profile-program-card">
+                        <div class="card-body py-3 d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <span class="text-muted small text-uppercase letter-spacing-tight">Minor</span>
+                                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                    <span class="small text-muted profile-field-status profile-field-status-gated flex-shrink-0 d-none text-end"
+                                          id="minorFieldStatus" aria-live="polite" style="min-width:3.5rem;"></span>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-accent profile-program-field-btn flex-shrink-0"
+                                            id="minorEditToggleBtn"
+                                            aria-expanded="false"
+                                            aria-controls="minorEditWrap minorComboMenu">
+                                        Edit
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="profile-program-display rounded-3 px-3 py-2 flex-grow-1 d-flex align-items-center" id="minorDisplayWrap">
+                                <span class="profile-program-display-text flex-grow-1 min-w-0" id="minorDisplay">&mdash;</span>
+                            </div>
+                            <div class="position-relative profile-combobox d-none mt-2" id="minorEditWrap">
+                                <label class="visually-hidden" for="minorComboInput">Minor</label>
+                                <input type="text"
+                                       id="minorComboInput"
+                                       class="form-control form-control-sm profile-combobox-input"
+                                       placeholder="Type to search or choose…"
+                                       autocomplete="off"
+                                       spellcheck="false"
+                                       role="combobox"
+                                       aria-autocomplete="list"
+                                       aria-expanded="false"
+                                       aria-controls="minorComboMenu"
+                                       tabindex="-1"/>
+                                <ul class="profile-combobox-menu list-group position-absolute shadow border-0 rounded-2 d-none overflow-auto"
+                                    id="minorComboMenu"
+                                    role="listbox"
+                                    hidden></ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -150,11 +214,37 @@
                     <div class="card shadow-sm h-100">
                         <div class="card-header bg-white fw-semibold">Current enrollment</div>
                         <div class="card-body small">
-                            <p class="text-muted mb-2" id="enrollmentMeta">
-                                Parsed from your latest term on the uploaded transcript (in-progress or ungraded lines).
-                            </p>
                             <div id="enrollmentContent">
                                 <p class="text-muted mb-0">Upload a transcript to detect courses.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-xl-8">
+                    <div class="card shadow-sm h-100 border-0 profile-degree-overview">
+                        <div class="card-body py-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small text-uppercase letter-spacing-tight">Degree progress</span>
+                                <a class="small fw-semibold" href="/progress">View full progress →</a>
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+                                <div>
+                                    <div class="fs-5 fw-semibold">
+                                        <span id="overviewCreditsEarned">—</span> /
+                                        <span id="overviewCreditsTarget">—</span>
+                                    </div>
+                                    <div class="text-muted small">credits earned / target</div>
+                                </div>
+                            </div>
+                            <div class="progress profile-degree-progress" role="progressbar" aria-label="Degree progress">
+                                <div id="overviewProgressBar" class="progress-bar" style="width:0%"></div>
+                            </div>
+                            <div class="text-muted small mt-2" id="overviewScopeLine"></div>
+                            <div id="overviewEmptyState" class="alert alert-light border small mt-2 mb-0 d-none">
+                                Upload a transcript on this page to start tracking credits.
                             </div>
                         </div>
                     </div>
@@ -178,23 +268,16 @@
             </div>
 
             <div class="row g-3 mb-3">
-                <div class="col-md-10 col-lg-8">
-                    <div id="programEditorCard" class="card shadow-sm d-none">
-                        <div class="card-body">
-                            <form id="profileInfoForm" class="row g-2 align-items-end">
-                                <div class="col-sm-5">
-                                    <label class="form-label small mb-1">Major</label>
-                                    <input id="majorInput" type="text" class="form-control form-control-sm" placeholder="e.g. Computer Science">
-                                </div>
-                                <div class="col-sm-5">
-                                    <label class="form-label small mb-1">Minor</label>
-                                    <input id="minorInput" type="text" class="form-control form-control-sm" placeholder="e.g. Math">
-                                </div>
-                                <div class="col-sm-2 d-flex gap-2">
-                                    <button type="submit" class="btn btn-outline-accent btn-sm">Save</button>
-                                    <button id="cancelProgramEditBtn" type="button" class="btn btn-outline-secondary btn-sm">Cancel</button>
-                                </div>
-                            </form>
+                <div class="col-12 col-xl-10">
+                    <div class="card shadow-sm h-100 wishlist-card">
+                        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                            <span>Course wishlist</span>
+                            <a href="/catalog" class="btn btn-outline-accent btn-xs">Browse catalog</a>
+                        </div>
+                        <div class="card-body small">
+                            <div id="wishlistContent">
+                                <p class="text-muted mb-0">Loading wishlist...</p>
+                            </div>
                         </div>
                     </div>
                 </div>

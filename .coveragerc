@@ -1,0 +1,25 @@
+[run]
+source =
+    scheduler
+    scrapers
+
+# Exclude scrapers that require live network access from coverage measurement.
+# These modules call external UTPB / SmartCatalog URLs and cannot be exercised
+# in an offline test environment without complex mocking.
+omit =
+    scrapers/catalog.py
+    scrapers/infer_terms.py
+    scrapers/sections.py
+    scrapers/session_dates.py
+    scrapers/__main__.py
+    */__pycache__/*
+    */tests/*
+
+[report]
+skip_empty = True
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
