@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress — UTPB Scheduler</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-md main-nav">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/planner">Planner</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/progress">Progress</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
+                </ul>
+                <ul class="navbar-nav align-items-center gap-2">
+                    <li class="nav-item"><a class="nav-link account-link" href="/account">Account</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/profile">Academic Profile</a></li>
+                    <li class="nav-item"><button id="logoutBtn" class="btn btn-sm btn-outline-danger ms-md-2 align-self-center" type="button">Logout</button></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content-area">
+        <div class="container-fluid px-4 py-3">
+            <div id="alertBox"></div>
+
+            <section class="card progress-hero border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                        <div class="progress-hero-main flex-grow-1 min-w-0">
+                            <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">Degree progress</p>
+                            <h1 class="h3 mb-2 text-navy-deep">Path to your degree</h1>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-3" id="progressProgramPills">
+                                <span class="text-muted small">Detected program:</span>
+                                <span class="badge bg-light text-muted border" id="progressMajorPill">Major: —</span>
+                                <span class="badge bg-light text-muted border" id="progressMinorPill">Minor: —</span>
+                            </div>
+                            <div class="d-flex flex-wrap gap-3 align-items-end mb-2">
+                                <div>
+                                    <div class="progress-hero-number">
+                                        <span id="progressCreditsEarned">0</span>
+                                        <span class="progress-hero-divider">/</span>
+                                        <span id="progressCreditsTarget">120</span>
+                                    </div>
+                                    <div class="text-muted small">credits earned / target</div>
+                                </div>
+                                <div>
+                                    <div class="progress-hero-number" id="progressPercentNumber">0%</div>
+                                    <div class="text-muted small">degree progress</div>
+                                </div>
+                            </div>
+                            <div class="progress progress-hero-bar" role="progressbar" aria-label="Degree progress">
+                                <div id="progressHeroBar" class="progress-bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <form id="progressTargetForm" class="progress-target-form">
+                            <label for="progressTargetInput" class="form-label small fw-semibold mb-1">Credits target</label>
+                            <div class="input-group input-group-sm">
+                                <input id="progressTargetInput" type="number" min="1" max="300" step="1" class="form-control" value="120">
+                                <button class="btn btn-accent" type="submit">Update</button>
+                            </div>
+                            <p class="text-muted small mb-0 mt-1" id="progressTargetStatus" aria-live="polite"></p>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <div id="progressEmptyTranscript" class="alert alert-info small d-none" role="status">
+                No transcript on file yet. <a href="/profile">Upload a PDF transcript on your profile page</a>
+                to populate completed and in-progress courses.
+            </div>
+            <div id="progressEmptyMajor" class="alert alert-light border small d-none" role="status">
+                No major detected. Pick a major on your <a href="/profile">profile page</a>
+                to scope the remaining-courses list.
+            </div>
+            <div id="progressTransferNote" class="alert alert-warning small d-none" role="status">
+                Transfer hours count toward total credits, but transfer course equivalents are not visible as individual courses.
+                Search below to mark matching UTPB courses as completed.
+            </div>
+
+            <div class="row g-4 align-items-start">
+                <div class="col-xl-8">
+                    <section class="card shadow-sm border-0 mb-4 progress-card progress-card-audit">
+                        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-start gap-2">
+                            <div>
+                                <span class="fw-semibold">Degree requirements</span>
+                                <div class="text-muted small" id="progressRequirementSource">Loading catalog requirements…</div>
+                            </div>
+                            <div class="progress-audit-summary" id="progressAuditSummary">
+                                Exact course matches only
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="progressRequirementAudit">
+                                <p class="text-muted small mb-0">Loading requirement audit…</p>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+
+                <div class="col-xl-4">
+                    <section class="card shadow-sm border-0 mb-4 progress-card progress-card-add">
+                        <div class="card-header bg-white fw-semibold">Add completed course</div>
+                        <div class="card-body small">
+                            <p class="text-muted mb-3">Use this for transfer equivalents or completed courses that the transcript parser did not list.</p>
+                            <form id="progressCourseSearchForm" class="row g-2 align-items-end">
+                                <div class="col-sm-4 col-xl-12">
+                                    <label for="progressCourseSubjectSelect" class="form-label small fw-semibold">Subject</label>
+                                    <select id="progressCourseSubjectSelect" class="form-select form-select-sm">
+                                        <option value="">All</option>
+                                    </select>
+                                </div>
+                                <div class="col-sm-5 col-xl-12">
+                                    <label for="progressCourseSearchInput" class="form-label small fw-semibold">Course search</label>
+                                    <input id="progressCourseSearchInput" class="form-control form-control-sm" type="search" placeholder="Search COSC 1336 or course title">
+                                </div>
+                                <div class="col-sm-3 col-xl-12">
+                                    <label class="form-label small fw-semibold invisible">Search</label>
+                                    <button class="btn btn-outline-accent btn-sm w-100" type="submit">Search courses</button>
+                                </div>
+                            </form>
+                            <div id="progressCourseSearchStatus" class="text-muted small mt-2" aria-live="polite"></div>
+                            <div id="progressCourseSearchResults" class="list-group mt-3"></div>
+                        </div>
+                    </section>
+
+                    <section class="card shadow-sm border-0 mb-4 progress-card progress-card-in-progress">
+                        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <span class="fw-semibold">In progress</span>
+                            <span class="text-muted small" id="progressInProgressCount"></span>
+                        </div>
+                        <div class="card-body small">
+                            <div id="progressInProgressContent">
+                                <p class="text-muted mb-0">Loading…</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <section class="card shadow-sm border-0 mb-4 progress-card progress-card-completed">
+                <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span class="fw-semibold">Completed history</span>
+                    <span class="text-muted small" id="progressCompletedCount"></span>
+                </div>
+                <div class="card-body small">
+                    <div id="progressCompletedContent">
+                        <p class="text-muted mb-0">Loading…</p>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/progress.js"></script>
+</body>
+</html>

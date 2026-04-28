@@ -8,7 +8,7 @@
     <link href="/static/style.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg main-nav">
+    <nav class="navbar navbar-expand-md main-nav">
         <div class="container-fluid px-4">
             <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
@@ -17,13 +17,14 @@
             <div class="collapse navbar-collapse" id="navContent">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/planner">Planner</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/progress">Progress</a></li>
                     <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/profile">Profile</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
                 </ul>
-                <ul class="navbar-nav">
+                <ul class="navbar-nav align-items-center gap-2">
                     <li class="nav-item"><a class="nav-link account-link active" href="/account">Account</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/profile">Academic Profile</a></li>
                 </ul>
             </div>
         </div>
@@ -32,12 +33,12 @@
     <div class="content-area">
         <div class="container-fluid px-4 py-3">
             <div class="row justify-content-center">
-                <div class="col-12 col-md-10 col-lg-7 col-xl-6">
-                    <div class="card p-4 shadow-sm content-card border-0">
-                        <div id="accountStatus" class="alert d-none mb-3" role="alert"></div>
+                <div class="col-12 col-md-10 col-lg-9 col-xl-8">
+                    <div id="accountStatus" class="alert d-none mb-3" role="alert"></div>
 
-                        <!-- Shown when not authenticated: login / register -->
-                        <div id="guestPanel">
+                    <!-- Shown when not authenticated: login / register -->
+                    <div id="guestPanel">
+                        <div class="card p-4 shadow-sm content-card border-0">
                             <h5 id="authTitle" class="mb-2">Login</h5>
                             <p id="authSubtitle" class="text-muted small">Sign in to access your personal schedule and profile.</p>
 
@@ -86,18 +87,122 @@
                                 </p>
                             </form>
                         </div>
+                    </div>
 
-                        <!-- Shown when authenticated: no duplicate login UI -->
-                        <div id="signedInPanel" class="d-none">
-                            <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">Account</p>
-                            <h5 class="mb-2 text-navy-deep">You're signed in</h5>
-                            <p class="text-muted small mb-4">
-                                Signed in as <strong id="signedInUsername"></strong>. Your schedule and academic profile are saved to this account.
-                            </p>
-                            <div class="d-grid gap-2">
-                                <a href="/" class="btn btn-accent">Open schedule</a>
-                                <a href="/profile" class="btn btn-outline-secondary">Academic profile</a>
-                                <button id="logoutBtn" class="btn btn-outline-danger" type="button">Logout</button>
+                    <!-- Shown when authenticated: account self-service -->
+                    <div id="signedInPanel" class="d-none">
+                        <div class="card mb-3 shadow-sm border-0" id="accountMetaCard">
+                            <div class="card-body">
+                                <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">Account</p>
+                                <h5 class="mb-3 text-navy-deep">Account overview</h5>
+                                <dl class="row mb-0 small">
+                                    <dt class="col-sm-5 text-muted">Signed in as</dt>
+                                    <dd class="col-sm-7"><strong id="accountUsername">—</strong></dd>
+                                    <dt class="col-sm-5 text-muted">Member since</dt>
+                                    <dd class="col-sm-7"><span id="accountCreated">—</span></dd>
+                                    <dt class="col-sm-5 text-muted">Transcript on file</dt>
+                                    <dd class="col-sm-7"><span id="accountHasTranscript">—</span></dd>
+                                    <dt class="col-sm-5 text-muted">Saved schedule plans</dt>
+                                    <dd class="col-sm-7"><span id="accountSchedulesCount">—</span></dd>
+                                </dl>
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <a href="/" class="btn btn-accent btn-sm">Open schedule</a>
+                                    <a href="/profile" class="btn btn-outline-secondary btn-sm">Academic profile</a>
+                                    <a href="/progress" class="btn btn-outline-secondary btn-sm">Degree progress</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3 shadow-sm border-0" id="changePasswordCard">
+                            <div class="card-body">
+                                <h6 class="card-title fw-semibold">Change password</h6>
+                                <p class="text-muted small mb-3">Confirm your current password, then enter and repeat your new password.</p>
+                                <div id="changePasswordStatus" class="alert d-none small py-2" role="alert"></div>
+                                <form id="changePasswordForm">
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">Current password</label>
+                                        <div class="input-group input-group-sm">
+                                            <input id="cpCurrentPassword" type="password" class="form-control" required autocomplete="current-password">
+                                            <button class="btn btn-outline-secondary" type="button" id="toggleCpCurrent" aria-label="Toggle current password visibility">&#128065;</button>
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">New password</label>
+                                        <div class="input-group input-group-sm">
+                                            <input id="cpNewPassword" type="password" class="form-control" required minlength="8" autocomplete="new-password">
+                                            <button class="btn btn-outline-secondary" type="button" id="toggleCpNew" aria-label="Toggle new password visibility">&#128065;</button>
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">Confirm new password</label>
+                                        <div class="input-group input-group-sm">
+                                            <input id="cpConfirmPassword" type="password" class="form-control" required minlength="8" autocomplete="new-password">
+                                            <button class="btn btn-outline-secondary" type="button" id="toggleCpConfirm" aria-label="Toggle confirm password visibility">&#128065;</button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-accent btn-sm">Update password</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3 shadow-sm border-0" id="changeUsernameCard">
+                            <div class="card-body">
+                                <h6 class="card-title fw-semibold">Change username</h6>
+                                <p class="text-muted small mb-3">Pick a new username (lowercase letters and numbers, at least 3 characters). Confirm with your password.</p>
+                                <div id="changeUsernameStatus" class="alert d-none small py-2" role="alert"></div>
+                                <form id="changeUsernameForm">
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">New username</label>
+                                        <input id="cuNewUsername" class="form-control form-control-sm" required minlength="3" autocomplete="username">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">Current password</label>
+                                        <div class="input-group input-group-sm">
+                                            <input id="cuCurrentPassword" type="password" class="form-control" required autocomplete="current-password">
+                                            <button class="btn btn-outline-secondary" type="button" id="toggleCuCurrent" aria-label="Toggle current password visibility">&#128065;</button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-accent btn-sm">Update username</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3 shadow-sm border-0" id="exportDataCard">
+                            <div class="card-body">
+                                <h6 class="card-title fw-semibold">Export my data</h6>
+                                <p class="text-muted small mb-3">Download a JSON file with your profile, schedule scenarios, completed-course overrides, wishlist, and saved settings.</p>
+                                <button type="button" id="exportDataBtn" class="btn btn-outline-secondary btn-sm">Download JSON export</button>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3 shadow-sm border border-danger" id="deleteAccountCard">
+                            <div class="card-body">
+                                <div id="deleteAccountStatus" class="alert d-none small py-2" role="alert"></div>
+                                <button type="button" id="deleteRevealBtn" class="btn btn-outline-danger btn-sm">Delete my account…</button>
+                                <form id="deleteAccountForm" class="d-none mt-3">
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">Type <strong>DELETE</strong> to confirm</label>
+                                        <input id="daConfirmText" class="form-control form-control-sm" required>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label mb-1 small">Current password</label>
+                                        <div class="input-group input-group-sm">
+                                            <input id="daCurrentPassword" type="password" class="form-control" required autocomplete="current-password">
+                                            <button class="btn btn-outline-secondary" type="button" id="toggleDaCurrent" aria-label="Toggle password visibility">&#128065;</button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-danger btn-sm">Permanently delete account</button>
+                                    <button type="button" class="btn btn-link btn-sm text-muted ms-2" id="deleteCancelBtn">Cancel</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3 shadow-sm border-0" id="logoutCard">
+                            <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div class="text-muted small">
+                                    Signed in as <strong id="signedInUsername"></strong>.
+                                </div>
+                                <button id="logoutBtn" class="btn btn-outline-danger btn-sm" type="button">Logout</button>
                             </div>
                         </div>
                     </div>
