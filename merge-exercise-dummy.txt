@@ -1,0 +1,10 @@
+Merge exercise — dummy file
+============================
+
+This file exists only so you can practice:
+  git push -u origin <branch-name>
+  merge via GitHub/GitLab or git merge
+
+Safe to delete after the exercise.
+
+Created: 2026-04-28
