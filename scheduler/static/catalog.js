@@ -54,9 +54,11 @@ function updateWishlistButtons(courseId) {
     var on = isWishlisted(courseId);
     for (var i = 0; i < buttons.length; i++) {
         buttons[i].classList.toggle("catalog-wishlist-on", on);
+        buttons[i].classList.toggle("btn-accent", on);
+        buttons[i].classList.toggle("btn-outline-secondary", !on);
         buttons[i].setAttribute("aria-pressed", on ? "true" : "false");
         buttons[i].title = on ? "Remove from wishlist" : "Add to wishlist";
-        buttons[i].innerHTML = on ? "&#9829;" : "&#9825;";
+        buttons[i].textContent = on ? "Saved" : "Wishlist";
     }
     if (detailCourse && String(detailCourse.id) === String(courseId) && detailWishlistBtn) {
         detailWishlistBtn.textContent = on ? "Remove from wishlist" : "Add to wishlist";
@@ -132,22 +134,20 @@ function loadCourses() {
             for (var i = 0; i < courses.length; i++) {
                 var c = courses[i];
                 html += "<tr>";
-                html += '<td class="text-center">';
-                html += '<button type="button" class="btn btn-link btn-sm catalog-wishlist-btn" ';
-                html += 'data-course-id="' + attr(c.id) + '" aria-label="Toggle wishlist" aria-pressed="false">&#9825;</button>';
-                html += "</td>";
                 html += '<td class="fw-semibold text-nowrap">' + dash(c.course_code) + "</td>";
                 html += "<td>" + dash(c.course_name) + "</td>";
                 html += '<td class="small">' + dash(c.prerequisites) + "</td>";
                 html += "<td>" + dash(c.term_infered) + "</td>";
-                html += '<td class="text-nowrap">';
+                html += '<td class="text-nowrap"><div class="d-flex flex-wrap gap-1">';
+                html += '<button type="button" class="btn btn-outline-secondary btn-xs catalog-wishlist-btn" ';
+                html += 'data-course-id="' + attr(c.id) + '" aria-label="Toggle wishlist" aria-pressed="false">Wishlist</button>';
                 html += '<button type="button" class="btn btn-outline-accent btn-xs catalog-detail-btn me-1" data-course-id="' + attr(c.id) + '">Detail</button>';
                 if (c.course_url) {
                     html += '<a href="' + attr(c.course_url) + '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-xs">View</a>';
                 }
-                html += "</td></tr>";
+                html += "</div></td></tr>";
             }
-            courseBody.innerHTML = html || '<tr><td colspan="6" class="text-muted text-center py-3">No courses found.</td></tr>';
+            courseBody.innerHTML = html || '<tr><td colspan="5" class="text-muted text-center py-3">No courses found.</td></tr>';
             courseCount.textContent = courses.length + " course" + (courses.length !== 1 ? "s" : "") + ".";
             refreshWishlistButtons();
         });
