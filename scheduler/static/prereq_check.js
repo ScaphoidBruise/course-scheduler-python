@@ -67,7 +67,18 @@
         clearChips();
         updateSummary(0);
         if (!codes.length) return;
-        fetch("/api/prereq-check?codes=" + encodeURIComponent(codes.join(",")))
+        var term = "";
+        if (typeof currentTerm === "function") {
+            term = currentTerm();
+        } else {
+            var termEl = document.getElementById("termValue");
+            term = termEl ? termEl.value : "";
+        }
+        var url = "/api/prereq-check?codes=" + encodeURIComponent(codes.join(","));
+        if (term) {
+            url += "&term=" + encodeURIComponent(term);
+        }
+        fetch(url)
             .then(function (r) {
                 if (!r.ok) throw new Error("prereq-check");
                 return r.json();

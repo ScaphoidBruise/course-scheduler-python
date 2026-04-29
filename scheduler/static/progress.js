@@ -6,6 +6,8 @@ var GRADE_OPTIONS = [
     "C+", "C", "C-", "D+", "D",
     "P", "CR", "S",
 ];
+var completedCourseCodes = {};
+var inProgressCourseCodes = {};
 
 function showAlert(message, type) {
     if (!alertBox) return;
@@ -27,6 +29,10 @@ function escapeHtml(s) {
 function fmt(n, digits) {
     if (n === null || n === undefined || n === "" || isNaN(Number(n))) return "—";
     return Number(n).toFixed(digits == null ? 1 : digits);
+}
+
+function normalizeCourseCode(code) {
+    return String(code || "").trim().replace(/\s+/g, " ").toUpperCase();
 }
 
 function bootstrapInstance() {
@@ -57,24 +63,24 @@ function loadMe() {
 function setHeroFromOverview(o) {
     var earnedEl = document.getElementById("progressCreditsEarned");
     var targetEl = document.getElementById("progressCreditsTarget");
-    var remainingEl = document.getElementById("progressRemainingNumber");
     var percentEl = document.getElementById("progressPercentNumber");
     var bar = document.getElementById("progressHeroBar");
     var majorPill = document.getElementById("progressMajorPill");
     var minorPill = document.getElementById("progressMinorPill");
-    var scopeNote = document.getElementById("progressScopeNote");
     var targetInput = document.getElementById("progressTargetInput");
     var emptyTranscript = document.getElementById("progressEmptyTranscript");
     var emptyMajor = document.getElementById("progressEmptyMajor");
+    var transferNote = document.getElementById("progressTransferNote");
+    var subjectSelect = document.getElementById("progressCourseSubjectSelect");
+    var targetStatus = document.getElementById("progressTargetStatus");
 
     var earned = (o && o.credits_completed != null) ? Number(o.credits_completed) : 0;
     var target = (o && o.credits_target != null) ? Number(o.credits_target) : 120;
     var pct = (o && o.percent_complete != null) ? Number(o.percent_complete) : 0;
-    var remaining = (o && o.courses_remaining_count != null) ? Number(o.courses_remaining_count) : 0;
+    var isCatalogTarget = !!(o && o.credits_target_source === "scraped_program_requirements");
 
     if (earnedEl) earnedEl.textContent = fmt(earned, earned % 1 === 0 ? 0 : 1);
     if (targetEl) targetEl.textContent = String(target);
-    if (remainingEl) remainingEl.textContent = String(remaining);
     if (percentEl) percentEl.textContent = pct.toFixed(0) + "%";
     if (bar) {
         bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
@@ -87,21 +93,146 @@ function setHeroFromOverview(o) {
     if (minorPill) {
         minorPill.textContent = "Minor: " + (o && o.minor ? o.minor : "—");
     }
-    if (scopeNote) {
-        var subjects = (o && o.scope_subjects) || [];
-        scopeNote.textContent = subjects.length
-            ? "Scope: " + subjects.join(", ")
+    if (targetInput && target > 0) {
+        targetInput.value = String(target);
+        targetInput.disabled = isCatalogTarget;
+    }
+    var targetButton = document.querySelector("#progressTargetForm button[type='submit']");
+    if (targetButton) targetButton.disabled = isCatalogTarget;
+    if (targetStatus) {
+        targetStatus.textContent = isCatalogTarget
+            ? "Catalog target: " + String(target) + " credits"
             : "";
     }
-    if (targetInput && target > 0) targetInput.value = String(target);
+    if (subjectSelect && !subjectSelect.value && o && o.scope_subjects && o.scope_subjects.length) {
+        subjectSelect.value = o.scope_subjects[0];
+    }
     if (emptyTranscript) emptyTranscript.classList.toggle("d-none", !!(o && o.has_transcript));
     if (emptyMajor) emptyMajor.classList.toggle("d-none", !!(o && o.major));
+    if (transferNote) transferNote.classList.toggle("d-none", !(o && Number(o.transfer_credits || 0) > 0));
+}
+
+function requirementStatusLabel(status) {
+    if (status === "complete") return "Complete";
+    if (status === "partial") return "In progress";
+    if (status === "choose") return "Choose option";
+    if (status === "optional") return "Optional";
+    return "Missing/incomplete";
+}
+
+function requirementTypeText(type, minCredits) {
+    if (type === "choice_option") return "Track or option";
+    if (type === "choose_from") return minCredits ? "Choose " + fmt(minCredits, minCredits % 1 === 0 ? 0 : 1) + " credits" : "Choose from list";
+    if (type === "optional") return "Optional";
+    return "Required";
+}
+
+function renderRequirementCourses(courses) {
+    if (!courses || !courses.length) {
+        return '<p class="text-muted small mb-0">No specific courses listed.</p>';
+    }
+    var html = '<div class="progress-audit-course-list">';
+    for (var i = 0; i < courses.length; i++) {
+        var course = courses[i] || {};
+        var status = course.status || "remaining";
+        var action = "";
+        if (status === "completed") {
+            action = '<span class="progress-remaining-status-badge progress-remaining-status-completed">Completed</span>';
+        } else if (status === "in_progress") {
+            action = '<span class="progress-remaining-status-badge progress-remaining-status-in-progress">In progress</span>';
+        } else {
+            action =
+                '<button type="button" class="btn btn-sm btn-accent progress-reference-mark-complete" ' +
+                'data-course-code="' + escapeHtml(course.course_code || "") + '">Mark complete</button>';
+        }
+        html +=
+            '<div class="progress-audit-course-row progress-audit-course-' + escapeHtml(status) + '">' +
+            '<div class="min-w-0">' +
+            '<div class="progress-audit-course-code">' + escapeHtml(course.course_code || "Course") + '</div>' +
+            '<div class="progress-audit-course-title">' + escapeHtml(course.course_title || "Untitled course") + '</div>' +
+            '</div>' +
+            action +
+            '</div>';
+    }
+    html += "</div>";
+    return html;
+}
+
+function renderRequirementBlockBody(block) {
+    if (block.requirement_type === "choose_from") {
+        return renderRequirementCourses(block.courses || []);
+    }
+    return renderRequirementCourses(block.courses || []);
+}
+
+function renderRequirementAudit(blocks, programInfo) {
+    var el = document.getElementById("progressRequirementAudit");
+    var sourceEl = document.getElementById("progressRequirementSource");
+    var summaryEl = document.getElementById("progressAuditSummary");
+    if (!el) return;
+    blocks = blocks || [];
+    if (sourceEl) {
+        if (programInfo && programInfo.program_name) {
+            sourceEl.innerHTML =
+                'Matched to <span class="fw-semibold text-navy-deep">' + escapeHtml(programInfo.program_name) + '</span>' +
+                (programInfo.degree_total_credits ? " · " + escapeHtml(fmt(programInfo.degree_total_credits, 0)) + " credits" : "");
+        } else {
+            sourceEl.textContent = "No scraped catalog match yet. Set your major on Profile.";
+        }
+    }
+    if (!blocks.length) {
+        el.innerHTML =
+            '<div class="progress-audit-empty">' +
+            '<div class="fw-semibold mb-1">No requirement audit available yet.</div>' +
+            '<div class="text-muted small">Upload a transcript and choose a major so Progress can match catalog requirements.</div>' +
+            '</div>';
+        if (summaryEl) summaryEl.innerHTML = "";
+        return;
+    }
+
+    if (summaryEl) {
+        summaryEl.textContent = "Exact course matches only";
+    }
+
+    var html = '<div class="progress-audit-list">';
+    for (var i = 0; i < blocks.length; i++) {
+        var block = blocks[i] || {};
+        if (Number(block.level || 0) <= 2 && block.min_credits) {
+            html +=
+                '<div class="progress-audit-section-title">' +
+                '<span>' + escapeHtml(block.heading || "Requirement section") + '</span>' +
+                '<strong>' + escapeHtml(fmt(block.min_credits, Number(block.min_credits) % 1 === 0 ? 0 : 1)) + ' credits</strong>' +
+                '</div>';
+        }
+        if (!block.course_count && block.status !== "optional" && block.status !== "choose") continue;
+        var minCredits = Number(block.min_credits || 0);
+        html +=
+            '<article class="progress-audit-block">' +
+            '<div class="progress-audit-block-top">' +
+            '<div class="min-w-0">' +
+            '<div class="progress-audit-block-title">' + escapeHtml(block.heading || "Requirement") + '</div>' +
+            '<div class="progress-audit-block-meta">' +
+            escapeHtml(requirementTypeText(block.requirement_type, minCredits)) +
+            (minCredits ? ' · ' + escapeHtml(fmt(minCredits, minCredits % 1 === 0 ? 0 : 1)) + ' credits' : '') +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            renderRequirementBlockBody(block) +
+            '</article>';
+    }
+    html += "</div>";
+    el.innerHTML = html;
 }
 
 function renderCompletedRows(rows) {
     var el = document.getElementById("progressCompletedContent");
     var countEl = document.getElementById("progressCompletedCount");
     if (!el) return;
+    completedCourseCodes = {};
+    for (var c = 0; c < (rows || []).length; c++) {
+        var completedCode = normalizeCourseCode((rows[c] || {}).course_code || (rows[c] || {}).course);
+        if (completedCode) completedCourseCodes[completedCode] = true;
+    }
     if (countEl) countEl.textContent = rows && rows.length ? rows.length + " course" + (rows.length === 1 ? "" : "s") : "";
     if (!rows || !rows.length) {
         el.innerHTML = '<p class="text-muted mb-0">No completed courses yet.</p>';
@@ -151,6 +282,11 @@ function renderInProgressRows(rows) {
     var el = document.getElementById("progressInProgressContent");
     var countEl = document.getElementById("progressInProgressCount");
     if (!el) return;
+    inProgressCourseCodes = {};
+    for (var p = 0; p < (rows || []).length; p++) {
+        var progressCode = normalizeCourseCode((rows[p] || {}).course_code || (rows[p] || {}).course);
+        if (progressCode) inProgressCourseCodes[progressCode] = true;
+    }
     if (countEl) countEl.textContent = rows && rows.length ? rows.length + " course" + (rows.length === 1 ? "" : "s") : "";
     if (!rows || !rows.length) {
         el.innerHTML = '<p class="text-muted mb-0">No in-progress courses detected.</p>';
@@ -186,67 +322,81 @@ function gradeSelectHtml() {
     return html;
 }
 
-function renderRemainingAccordion(grouped) {
-    var el = document.getElementById("progressRemainingContent");
-    if (!el) return;
-    grouped = grouped || {};
-    var seasons = ["Spring", "Summer", "Fall", "Unscheduled"];
-    var totalCount = 0;
-    var sectionsHtml = "";
-    for (var i = 0; i < seasons.length; i++) {
-        var season = seasons[i];
-        var rows = grouped[season] || [];
-        totalCount += rows.length;
-        var paneId = "progressRemaining-" + season.toLowerCase();
-        var headingId = paneId + "-heading";
-        var collapsed = i !== 0;
-        sectionsHtml +=
-            '<div class="accordion-item">' +
-            '<h2 class="accordion-header" id="' + headingId + '">' +
-            '<button class="accordion-button' + (collapsed ? " collapsed" : "") + '" type="button" ' +
-            'data-bs-toggle="collapse" data-bs-target="#' + paneId + '" ' +
-            'aria-expanded="' + (!collapsed) + '" aria-controls="' + paneId + '">' +
-            escapeHtml(season) + ' <span class="text-muted small ms-2">(' + rows.length + ')</span>' +
-            '</button></h2>' +
-            '<div id="' + paneId + '" class="accordion-collapse collapse' + (collapsed ? "" : " show") + '" ' +
-            'aria-labelledby="' + headingId + '">' +
-            '<div class="accordion-body">';
-        if (!rows.length) {
-            sectionsHtml += '<p class="text-muted small mb-0">Nothing remaining for this season.</p>';
-        } else {
-            sectionsHtml += '<div class="d-flex flex-wrap gap-2">';
-            for (var j = 0; j < rows.length; j++) {
-                var r = rows[j];
-                var code = r.course_code || "Course";
-                var title = r.course_name ? r.course_name : "";
-                var content =
-                    '<div class="progress-popover-form">' +
-                    '<div class="mb-2 small text-muted">' + escapeHtml(title || code) + "</div>" +
-                    '<label class="form-label small mb-1">Grade</label>' +
-                    gradeSelectHtml() +
-                    '<button type="button" class="btn btn-accent btn-sm w-100 mt-2 progress-popover-save" ' +
-                    'data-course-code="' + escapeHtml(code) + '">Mark as completed</button>' +
-                    "</div>";
-                sectionsHtml +=
-                    '<button type="button" class="progress-remaining-pill btn btn-sm btn-outline-secondary" ' +
-                    'data-bs-toggle="popover" data-bs-trigger="manual" data-bs-html="true" ' +
-                    'data-bs-placement="top" data-bs-content="' + escapeHtml(content) + '" ' +
-                    'data-bs-title="' + escapeHtml(code) + '" ' +
-                    'data-course-code="' + escapeHtml(code) + '" ' +
-                    'title="' + escapeHtml(title || "") + '">' +
-                    escapeHtml(code) +
-                    "</button>";
-            }
-            sectionsHtml += "</div>";
-        }
-        sectionsHtml += "</div></div></div>";
-    }
-    if (!totalCount) {
-        el.innerHTML = '<p class="text-muted mb-0">No remaining catalog courses found for the detected program subjects.</p>';
+function inlineGradeSelectHtml() {
+    return gradeSelectHtml().replace("progress-popover-grade", "progress-course-result-grade");
+}
+
+function postCompletedOverride(courseCode, grade) {
+    return fetch("/api/completed-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course_code: courseCode, grade: grade || "" }),
+    }).then(function (r) {
+        return r.text().then(function (text) {
+            var body = {};
+            try { body = text ? JSON.parse(text) : {}; } catch (err) { body = {}; }
+            if (!r.ok) throw new Error(body.error || "Could not mark course completed.");
+            return body;
+        });
+    });
+}
+
+function renderCourseSearchResults(rows) {
+    var resultsEl = document.getElementById("progressCourseSearchResults");
+    var statusEl = document.getElementById("progressCourseSearchStatus");
+    if (!resultsEl) return;
+    rows = rows || [];
+    if (statusEl) statusEl.textContent = rows.length ? rows.length + " result" + (rows.length === 1 ? "" : "s") + " found." : "No matching courses found.";
+    if (!rows.length) {
+        resultsEl.innerHTML = "";
         return;
     }
-    el.innerHTML = '<div class="accordion progress-remaining-accordion">' + sectionsHtml + "</div>";
-    enablePopovers(el);
+    var html = "";
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i] || {};
+        var code = row.course_code || "";
+        var title = row.course_name || "";
+        var normalized = normalizeCourseCode(code);
+        var state = "";
+        var action = '<div class="progress-course-result-action">' +
+            inlineGradeSelectHtml() +
+            '<button type="button" class="btn btn-sm btn-accent progress-course-result-add" data-course-code="' + escapeHtml(code) + '">Mark completed</button>' +
+            '</div>';
+        if (completedCourseCodes[normalized]) {
+            state = '<span class="badge text-bg-success">Already completed</span>';
+            action = state;
+        } else if (inProgressCourseCodes[normalized]) {
+            state = '<span class="badge text-bg-primary">In progress</span>';
+            action = state;
+        }
+        html += '<div class="list-group-item d-flex justify-content-between align-items-start gap-3 progress-course-result-item">' +
+            '<div class="min-w-0">' +
+            '<div class="fw-semibold">' + escapeHtml(code) + '</div>' +
+            '<div class="text-muted small">' + escapeHtml(title || "Untitled course") + '</div>' +
+            '</div>' +
+            action +
+            '</div>';
+    }
+    resultsEl.innerHTML = html;
+}
+
+function searchProgressCourses(query) {
+    var statusEl = document.getElementById("progressCourseSearchStatus");
+    var subjectEl = document.getElementById("progressCourseSubjectSelect");
+    var subject = subjectEl ? subjectEl.value.trim().toUpperCase() : "";
+    var params = new URLSearchParams();
+    if (query) params.set("search", query);
+    if (subject) params.set("subject", subject);
+    if (statusEl) statusEl.textContent = "Searching...";
+    return fetch("/api/completion-course-search?" + params.toString())
+        .then(function (r) {
+            if (!r.ok) throw new Error("course-search");
+            return r.json();
+        })
+        .then(renderCourseSearchResults)
+        .catch(function () {
+            if (statusEl) statusEl.textContent = "Could not search courses.";
+        });
 }
 
 function enableTooltips(scope) {
@@ -270,7 +420,7 @@ function enablePopovers(scope) {
 }
 
 document.addEventListener("click", function (e) {
-    var pill = e.target && e.target.closest ? e.target.closest(".progress-remaining-pill") : null;
+    var pill = e.target && e.target.closest ? e.target.closest(".progress-remaining-pill[data-bs-toggle='popover']") : null;
     var bs = bootstrapInstance();
     if (pill) {
         if (!bs || !bs.Popover) return;
@@ -298,15 +448,7 @@ document.addEventListener("click", function (e) {
             if (sel) grade = sel.value;
         }
         save.disabled = true;
-        fetch("/api/completed-overrides", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ course_code: code, grade: grade || "" }),
-        })
-            .then(function (r) {
-                if (!r.ok) throw new Error("override");
-                return r.json();
-            })
+        postCompletedOverride(code, grade)
             .then(function () {
                 showAlert("Marked " + escapeHtml(code) + " as completed.", "success");
                 if (openPopoverEl) {
@@ -318,6 +460,45 @@ document.addEventListener("click", function (e) {
             .catch(function () {
                 save.disabled = false;
                 showAlert("Could not mark " + escapeHtml(code) + " as completed.", "danger");
+            });
+        return;
+    }
+    var addCourseBtn = e.target && e.target.closest ? e.target.closest(".progress-course-result-add") : null;
+    if (addCourseBtn) {
+        e.preventDefault();
+        var addCode = addCourseBtn.getAttribute("data-course-code") || "";
+        var resultItem = addCourseBtn.closest(".progress-course-result-item");
+        var gradeInput = resultItem ? resultItem.querySelector(".progress-course-result-grade") : null;
+        var addGrade = gradeInput ? gradeInput.value : "";
+        addCourseBtn.disabled = true;
+        postCompletedOverride(addCode, addGrade)
+            .then(function () {
+                showAlert("Marked " + escapeHtml(addCode) + " as completed.", "success");
+                renderCourseSearchResults([]);
+                var searchInput = document.getElementById("progressCourseSearchInput");
+                if (searchInput) searchInput.value = "";
+                return loadAll();
+            })
+            .catch(function (err) {
+                addCourseBtn.disabled = false;
+                showAlert(escapeHtml(err.message || ("Could not mark " + addCode + " as completed.")), "danger");
+            });
+        return;
+    }
+    var referenceCompleteBtn = e.target && e.target.closest ? e.target.closest(".progress-reference-mark-complete") : null;
+    if (referenceCompleteBtn) {
+        e.preventDefault();
+        var referenceCode = referenceCompleteBtn.getAttribute("data-course-code") || "";
+        if (!referenceCode) return;
+        referenceCompleteBtn.disabled = true;
+        postCompletedOverride(referenceCode, "")
+            .then(function () {
+                showAlert("Marked " + escapeHtml(referenceCode) + " as completed.", "success");
+                return loadAll();
+            })
+            .catch(function (err) {
+                referenceCompleteBtn.disabled = false;
+                showAlert(escapeHtml(err.message || ("Could not mark " + referenceCode + " as completed.")), "danger");
             });
         return;
     }
@@ -363,7 +544,7 @@ function loadDetail() {
         .then(function (data) {
             renderCompletedRows(data.completed || []);
             renderInProgressRows(data.in_progress || []);
-            renderRemainingAccordion(data.remaining_by_typical_term || {});
+            renderRequirementAudit(data.requirement_audit || [], data.program_requirements || null);
         });
 }
 
@@ -406,8 +587,48 @@ if (targetForm) {
     });
 }
 
+var courseSearchForm = document.getElementById("progressCourseSearchForm");
+if (courseSearchForm) {
+    courseSearchForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var input = document.getElementById("progressCourseSearchInput");
+        var subjectInput = document.getElementById("progressCourseSubjectSelect");
+        var statusEl = document.getElementById("progressCourseSearchStatus");
+        var query = input ? input.value.trim() : "";
+        var subject = subjectInput ? subjectInput.value.trim() : "";
+        if (query.length < 2 && subject.length < 2) {
+            if (statusEl) statusEl.textContent = "Enter at least 2 search characters or a degree abbreviation.";
+            return;
+        }
+        searchProgressCourses(query);
+    });
+}
+
+function loadProgressCourseSubjects() {
+    var subjectSelect = document.getElementById("progressCourseSubjectSelect");
+    if (!subjectSelect) return Promise.resolve();
+    return fetch("/api/course-subjects")
+        .then(function (r) {
+            if (!r.ok) throw new Error("subjects");
+            return r.json();
+        })
+        .then(function (subjects) {
+            for (var i = 0; i < subjects.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = subjects[i];
+                opt.textContent = subjects[i];
+                subjectSelect.appendChild(opt);
+            }
+        })
+        .catch(function () {
+            return null;
+        });
+}
+
 loadMe()
-    .then(loadAll)
+    .then(function () {
+        return loadProgressCourseSubjects().then(loadAll);
+    })
     .catch(function (err) {
         if (err && err.message === "Unauthorized") return;
         showAlert("Could not load progress data.", "danger");

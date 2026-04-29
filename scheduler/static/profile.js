@@ -188,10 +188,15 @@ function renderPastCredits(tp) {
     var pack = getTranscriptCourseRows(tp);
     var rows = pack.rows;
     var partial = pack.partial;
+    var transferEarned = tp ? Number(tp.transfer_earned_total || 0) : 0;
+    var transferNote = transferEarned > 0
+        ? '<div class="alert alert-warning py-2 small mb-2" role="status">Transfer hours are counted in total credits, but individual transfer equivalents are not visible in this institutional course list. Use the Progress page to mark matching UTPB courses as completed.</div>'
+        : "";
     if (!rows.length) {
         meta.textContent =
             "Institutional courses (UTPB) by term from the parsed transcript. Transfer work is summarized elsewhere.";
         el.innerHTML =
+            transferNote +
             '<p class="text-muted mb-0">' +
             (!tp
                 ? "No transcript data yet."
@@ -213,7 +218,7 @@ function renderPastCredits(tp) {
     if (partial) {
         meta.textContent += " Older terms may be missing until you re-import the transcript.";
     }
-    var html = note;
+    var html = transferNote + note;
     html +=
         '<div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle section-table"><thead><tr>' +
         "<th>Term</th><th>Course</th><th>Title</th>" +
@@ -763,6 +768,7 @@ function renderProfile(data) {
             html += "<p><strong>Transfer hours (earned / attempted):</strong> "
                 + fmtNum(tp.transfer_earned_total, 1) + " / "
                 + fmtNum(tp.transfer_attempted_total, 1) + "</p>";
+            html += '<p class="text-muted small mb-0">Transfer hours count toward total credits, but course-level requirements need matching UTPB courses marked completed on the Progress page.</p>';
         }
         tEl.innerHTML = html || '<p class="text-muted mb-0">Transcript parsed; no extra summary lines.</p>';
     }
@@ -792,11 +798,10 @@ function loadProfile() {
 function loadDegreeOverview() {
     var earnedEl = document.getElementById("overviewCreditsEarned");
     var targetEl = document.getElementById("overviewCreditsTarget");
-    var remainingEl = document.getElementById("overviewRemainingCount");
     var bar = document.getElementById("overviewProgressBar");
     var scopeLine = document.getElementById("overviewScopeLine");
     var emptyState = document.getElementById("overviewEmptyState");
-    if (!earnedEl || !targetEl || !remainingEl || !bar) return;
+    if (!earnedEl || !targetEl || !bar) return;
 
     fetch("/api/degree-progress/overview")
         .then(function (r) {
@@ -806,19 +811,15 @@ function loadDegreeOverview() {
         .then(function (data) {
             var earned = data.credits_completed != null ? Number(data.credits_completed) : 0;
             var target = data.credits_target != null ? Number(data.credits_target) : 120;
-            var remaining = data.courses_remaining_count != null ? data.courses_remaining_count : 0;
             var pct = data.percent_complete != null ? Number(data.percent_complete) : 0;
             earnedEl.textContent = earned % 1 === 0 ? String(earned) : earned.toFixed(1);
             targetEl.textContent = String(target);
-            remainingEl.textContent = String(remaining);
             bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
             bar.setAttribute("aria-valuenow", String(pct));
             if (scopeLine) {
                 var pieces = [];
                 if (data.major) pieces.push("Based on: " + data.major);
-                if (data.scope_subjects && data.scope_subjects.length) {
-                    pieces.push("scope: " + data.scope_subjects.join(", "));
-                }
+                if (data.transfer_note) pieces.push(data.transfer_note);
                 scopeLine.textContent = pieces.join(" · ");
             }
             if (emptyState) {
@@ -859,7 +860,13 @@ document.getElementById("transcriptForm").addEventListener("submit", function (e
                 );
                 return;
             }
-            showAlert("Transcript parsed; your profile was updated.", "success");
+            var seeded = res.body.seeded_schedule || {};
+            var msg = "Transcript parsed; your profile was updated.";
+            if (seeded.added_count > 0) {
+                msg += " " + seeded.added_count + " current course" + (seeded.added_count === 1 ? "" : "s") +
+                    " added to Schedule. Choose exact sections there if any do not appear on the calendar.";
+            }
+            showAlert(msg, "success");
             inp.value = "";
             programFieldsEditing = false;
             pendingCloseProgramFields = false;

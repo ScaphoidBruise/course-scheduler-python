@@ -9,7 +9,7 @@
     <link href="/static/planner.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg main-nav">
+    <nav class="navbar navbar-expand-md main-nav">
         <div class="container-fluid px-4">
             <a class="navbar-brand" href="/"><span class="brand-accent">UTPB</span> Scheduler</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
@@ -18,16 +18,15 @@
             <div class="collapse navbar-collapse" id="navContent">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Schedule</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/profile">Profile</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/progress">Progress</a></li>
                     <li class="nav-item"><a class="nav-link active" href="/planner">Planner</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/progress">Progress</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/catalog">Catalog</a></li>
                     <li class="nav-item"><a class="nav-link" href="/help">Help</a></li>
                 </ul>
-                <ul class="navbar-nav">
+                <ul class="navbar-nav align-items-center gap-2">
                     <li class="nav-item"><a class="nav-link account-link" href="/account">Account</a></li>
-                    <li class="nav-item"><button id="logoutBtn" class="btn btn-sm btn-outline-danger ms-lg-2 mt-2 mt-lg-0" type="button">Logout</button></li>
+                    <li class="nav-item"><a class="nav-link" href="/profile">Academic Profile</a></li>
+                    <li class="nav-item"><button id="logoutBtn" class="btn btn-sm btn-outline-danger ms-md-2 align-self-center" type="button">Logout</button></li>
                 </ul>
             </div>
         </div>
@@ -43,7 +42,7 @@
                         <div class="planner-hero-main">
                             <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">Planner dashboard</p>
                             <h1 class="h3 mb-2 text-navy-deep">Path to graduation</h1>
-                            <p class="text-muted mb-3">See all saved term plans together and track progress toward your credit goal.</p>
+                            <p class="text-muted mb-3">See all saved term plans together and track progress toward your degree credit target.</p>
                             <div class="d-flex flex-wrap gap-3 align-items-end mb-2">
                                 <div>
                                     <div class="planner-hero-number">
@@ -62,8 +61,11 @@
                                     <div class="text-muted small">estimated graduation</div>
                                 </div>
                             </div>
-                            <div class="progress planner-progress" role="progressbar" aria-label="Graduation progress">
-                                <div id="graduationProgress" class="progress-bar planner-progress-bar" style="width:0%"></div>
+                            <div class="planner-progress-wrap">
+                                <div class="progress planner-progress" role="progressbar" aria-label="Graduation progress">
+                                    <div id="graduationProgress" class="progress-bar planner-progress-bar" style="width:0%"></div>
+                                </div>
+                                <span id="graduationProgressLabel" class="planner-progress-label">0%</span>
                             </div>
                         </div>
                         <form id="targetForm" class="planner-target-form">
@@ -72,6 +74,7 @@
                                 <input id="targetInput" type="number" min="1" max="300" step="1" class="form-control" value="120">
                                 <button class="btn btn-accent" type="submit">Update</button>
                             </div>
+                            <p class="text-muted small mb-0 mt-1" id="plannerTargetStatus" aria-live="polite"></p>
                         </form>
                     </div>
                 </div>
@@ -84,6 +87,17 @@
                 </div>
                 <div id="termTimeline" class="planner-term-scroll" aria-live="polite">
                     <div class="planner-loading">Loading planner...</div>
+                </div>
+            </section>
+
+            <section class="card shadow-sm border-0 mb-4 planner-ai-launch">
+                <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">AI integration</p>
+                        <h2 class="h5 mb-1">UTPB Planner Advisor</h2>
+                        <p class="text-muted mb-0">Open a side chat that uses your profile, transcript summary, degree progress, and saved terms.</p>
+                    </div>
+                    <button id="aiChatOpenBtn" class="btn btn-accent" type="button">Open planner chat</button>
                 </div>
             </section>
 
@@ -117,6 +131,29 @@
             </div>
         </div>
     </div>
+
+    <div id="aiChatBackdrop" class="planner-chat-backdrop" hidden></div>
+    <aside id="aiChatDrawer" class="planner-chat-drawer" aria-hidden="true" aria-labelledby="aiChatTitle">
+        <div class="planner-chat-header">
+            <div>
+                <p class="text-uppercase text-muted small mb-1 letter-spacing-tight">UTPB AI advisor</p>
+                <h2 id="aiChatTitle" class="h5 mb-0">Planner chat</h2>
+            </div>
+            <button id="aiChatCloseBtn" class="btn btn-sm btn-outline-secondary" type="button" aria-label="Close planner chat">Close</button>
+        </div>
+        <div id="aiChatSummary" class="planner-chat-summary small">
+            Open the chat to summarize what the app knows about your plan.
+        </div>
+        <div id="aiChatTranscriptPrompt" class="planner-chat-prompt small">
+            For best results, <a href="/profile">upload your transcript PDF on Profile</a> first.
+        </div>
+        <div id="aiChatMessages" class="planner-chat-messages" aria-live="polite"></div>
+        <form id="aiChatForm" class="planner-chat-form">
+            <label class="visually-hidden" for="aiChatInput">Ask the planner advisor</label>
+            <textarea id="aiChatInput" class="form-control" rows="2" placeholder="Ask about your course plan, transfer credits, or next term..."></textarea>
+            <button id="aiChatSendBtn" class="btn btn-accent" type="submit">Send</button>
+        </form>
+    </aside>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/planner.js"></script>
